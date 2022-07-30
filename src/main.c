@@ -1,5 +1,3 @@
-#include "core/fl_primitives.h"
-#include "core/fl_system.h"
 #include <follia.h>
 
 #include <stdio.h>
@@ -38,23 +36,18 @@ int main() {
 
     const uint32_t map_width = 8, map_height = 8;
     uint8_t map[64] = { 
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 3, 1, 3, 1, 0, 0,
-        0, 0, 0, 0, 0, 3, 0, 0,
-        0, 1, 0, 2, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 3, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0
+        1, 3, 1, 3, 1, 3, 1, 3,
+        3, 0, 0, 0, 0, 0, 3, 1,
+        1, 0, 0, 0, 0, 0, 0, 3,
+        3, 1, 0, 2, 0, 0, 3, 1,
+        1, 0, 0, 0, 0, 0, 0, 3,
+        3, 0, 0, 1, 3, 0, 0, 1,
+        1, 0, 0, 0, 1, 0, 0, 3,
+        3, 1, 3, 1, 3, 1, 3, 1
     };
 
     player_t player = { 0 };
-    player.angle = 0.f;
     vec2f_t direction = { 0 };
-
-    for(int i = -360; i <= 360; ++i) {
-        printf("tan(%d): %f\n", i, tan((float)i * PI / 180.f));
-    }
 
     // search for player start position
     for(int y = 0; y < map_height; ++y) {
@@ -71,6 +64,8 @@ int main() {
     char player_pos_text[32];
     char fps_text[16] = "FPS: -";
     FL_Bool first = true;
+
+    vec2f_t mouse = { 0 };
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
@@ -89,6 +84,9 @@ int main() {
                     case FL_KEY_w: case FL_KEY_s: player.move = 0; break;
                     default: break;
                 }
+            } else if(event.type == FL_EVENT_MOUSE_MOVED) {
+                mouse.x = event.mouse.x;
+                mouse.y = event.mouse.y;
             }
         }
 
@@ -119,6 +117,7 @@ int main() {
         }
       
         FL_ClearScreen();
+        FL_DrawRect(0, 0, FL_GetWindowWidth(), FL_GetWindowHeight() / 2, 0x444444, true);
 
         // ==== DRAW MAP ====
         const int mm_w = 128, mm_h = 128;
@@ -144,9 +143,8 @@ int main() {
             }
         }
 
-        
-
         // ==== DRAW GAME ====
+        const float r = 20;
         const int WALL_HEIGHT = 1;
         const float fov = 60.f;
         const float step = fov / FL_GetWindowWidth();
@@ -157,6 +155,9 @@ int main() {
         if(current < 0) current += 360.f;
 
         for(int i = 0; i < FL_GetWindowWidth(); i++) {
+            int v_map_x = -1, v_map_y = -1, h_map_x = -1, h_map_y = -1;
+            float v_wall_distance = 999999.f, h_wall_distance = 999999.f;
+
             const float angle_tan = tan(current * PI / 180);
 
             {
@@ -165,27 +166,20 @@ int main() {
                 const float Xa = -1.f / angle_tan;
                 const float Ya = is_down ? 1 : -1;
 
-                float Ay = (is_down ? floor(player.y) + 1 : floor(player.y) - 0.1f);
+                float Ay = (is_down ? floor(player.y) + 1 : floor(player.y) - 0.0001f);
                 float Ax = player.x + (player.y - Ay) / -angle_tan;
 
-                for(int j = 0; j < 5; ++j) {
-                    uint8_t c = 255.f;// * ((float)i / FL_GetWindowWidth());
+                for(int j = 0; j < r; ++j) {
+                    uint8_t c = 255.f;
 
                     const float distance = absf(player.x - Ax) / cos(current * PI / 180);
 
-                    if(absf(distance) < 5) {
-                        FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 2, (c << 16 | c << 8 | c), true);
-
-                        
-                        
-                    }
-
                     int map_x = floor(Ax), map_y = floor(Ay);
                     if(map_x >= 0 && map_x < map_width && map_y >= 0 && map_y < map_height && map[map_y * map_width + map_x] != 0) {
-                        const float fish = (float)i / FL_GetWindowWidth() * fov;
-                        const float cdistance = distance * cos((fish-(fov / 2)) * PI / 180);
-                        const float height = (float)FL_GetWindowHeight() / cdistance;
-                        FL_DrawLine(i, (float)FL_GetWindowHeight() / 2 - height / 2, i, (float)FL_GetWindowHeight() / 2 + height / 2, 0xffff00);
+                        FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 1, (c << 16 | c << 8 | c), true);
+                        h_wall_distance = distance;
+                        h_map_x = map_x;
+                        h_map_y = map_y;
 
                         break;
                     }
@@ -201,24 +195,21 @@ int main() {
                 const float Xa = is_right ? 1 : -1;
                 const float Ya = angle_tan;
 
-                float Ax = is_right ? floor(player.x) + 1 : floor(player.x) - 0.1f;
+                float Ax = is_right ? floor(player.x) + 1 : floor(player.x) - 0.0001f;
                 float Ay = player.y - (Ax - player.x) * -angle_tan;
 
-                for(int j = 0; j < 5; ++j) {
-                    uint8_t c = 255.f;// * ((float)i / FL_GetWindowWidth());
+                for(int j = 0; j < r; ++j) {
+                    uint8_t c = 255.f;
 
                     const float distance = absf(player.x - Ax) / cos(current * PI / 180);
 
-                    if(absf(distance) < 5) {
-                        FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 2, (c << 16 | c << 8 | c), true);
-                    }
-
                     int map_x = floor(Ax), map_y = floor(Ay);
                     if(map_x >= 0 && map_x < map_width && map_y >= 0 && map_y < map_height && map[map_y * map_width + map_x] != 0) {
-                        const float fish = (float)i / FL_GetWindowWidth() * fov;
-                        const float cdistance = distance * cos((fish-(fov / 2)) * PI / 180);
-                        const float height = (float)FL_GetWindowHeight() / cdistance;
-                        FL_DrawLine(i, (float)FL_GetWindowHeight() / 2 - height / 2, i, (float)FL_GetWindowHeight() / 2 + height / 2, 0xff0000);
+                        FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 1, (c << 16 | c << 8 | c), true);
+
+                        v_wall_distance = distance;
+                        v_map_x = map_x;
+                        v_map_y = map_y;
 
                         break;
                     }
@@ -226,6 +217,24 @@ int main() {
                     Ax += Xa;
                     Ay += is_right ? Ya : -Ya;
                 }
+            }
+
+            if(absf(h_wall_distance) < absf(v_wall_distance) && absf(h_wall_distance) < r) {
+                const uint32_t color = map[h_map_y * map_width + h_map_x] == 1 ? 0xffff00 : 0xff00ff;
+
+                const float fish = (float)i / FL_GetWindowWidth() * fov;
+                const float cdistance = h_wall_distance * cos((fish-(fov / 2)) * PI / 180);
+                const float height = (float)FL_GetWindowHeight() / cdistance;
+
+                FL_DrawLine(i, (float)FL_GetWindowHeight() / 2 - height / 2, i, (float)FL_GetWindowHeight() / 2 + height / 2, color);
+            } else if(absf(v_wall_distance) < absf(h_wall_distance) && absf(v_wall_distance) < r) {
+                const uint32_t color = map[v_map_y * map_width + v_map_x] == 1 ? 0xffff00 : 0xff00ff;
+
+                const float fish = (float)i / FL_GetWindowWidth() * fov;
+                const float cdistance = v_wall_distance * cos((fish-(fov / 2)) * PI / 180);
+                const float height = (float)FL_GetWindowHeight() / cdistance;
+
+                FL_DrawLine(i, (float)FL_GetWindowHeight() / 2 - height / 2, i, (float)FL_GetWindowHeight() / 2 + height / 2, color);
             }
 
             current += step;
@@ -238,6 +247,9 @@ int main() {
         FL_SetTextColor(0);
         FL_DrawTextBDF(4, FL_GetWindowHeight() - 28, fps_text, 16, 640, knxt);
         FL_DrawTextBDF(4, FL_GetWindowHeight() - 52, player_pos_text, 32, 640, knxt);
+
+        FL_DrawCircle(mouse.x, mouse.y, 2, 0x0000ff, true);
+        FL_DrawLine(mouse.x, 0, mouse.x, FL_GetWindowHeight(), 0x0000ff);
 
         FL_Render();
     }
