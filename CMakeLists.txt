@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.18)
+cmake_policy(SET CMP0076 NEW)
+
+project(raycasting)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+add_executable(raycasting src/main.c)
+
+target_include_directories(raycasting PRIVATE libs/follia)
+find_library(follia NAMES follia PATHS libs REQUIRED)
+
+target_link_libraries(raycasting PRIVATE -lm ${follia})
