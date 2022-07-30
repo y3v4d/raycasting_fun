@@ -22,6 +22,36 @@ typedef struct {
     float move;
 } player_t;
 
+const float fov = 60.f;
+const uint32_t map_width = 8, map_height = 8;
+uint8_t map[64] = { 
+    1, 3, 1, 3, 1, 3, 1, 3,
+    3, 0, 0, 0, 0, 0, 3, 1,
+    1, 0, 0, 0, 0, 0, 0, 3,
+    3, 1, 0, 2, 0, 0, 3, 1,
+    1, 0, 0, 0, 0, 0, 0, 3,
+    3, 0, 0, 1, 3, 0, 0, 1,
+    1, 0, 0, 0, 1, 0, 0, 3,
+    3, 1, 3, 1, 3, 1, 3, 1
+};
+
+vec2f_t mouse = { 0 };
+char column_info[64] = "Column: - Distance: -";
+
+void draw_column(int column, float distance, int map_x, int map_y) {
+    if(column == mouse.x) {
+        snprintf(column_info, 64, "Column: %d Distance: %f", column, distance);
+    }
+
+    const uint32_t color = map[map_y * map_width + map_x] == 1 ? 0xffff00 : 0xff00ff;
+    
+    const float fish = (float)column / FL_GetWindowWidth() * fov - fov / 2;
+    const float cdistance = distance * cos(fish * PI / 180);
+    const float half_height = (float)FL_GetWindowHeight() / cdistance / 2;
+
+    FL_DrawLine(column, (float)FL_GetWindowHeight() / 2 - half_height, column, (float)FL_GetWindowHeight() / 2 + half_height, color);
+}
+
 int main() {
     if(!FL_Initialize(640, 480))
         exit(-1);
@@ -33,18 +63,6 @@ int main() {
         FL_Close();
         exit(-1);
     }
-
-    const uint32_t map_width = 8, map_height = 8;
-    uint8_t map[64] = { 
-        1, 3, 1, 3, 1, 3, 1, 3,
-        3, 0, 0, 0, 0, 0, 3, 1,
-        1, 0, 0, 0, 0, 0, 0, 3,
-        3, 1, 0, 2, 0, 0, 3, 1,
-        1, 0, 0, 0, 0, 0, 0, 3,
-        3, 0, 0, 1, 3, 0, 0, 1,
-        1, 0, 0, 0, 1, 0, 0, 3,
-        3, 1, 3, 1, 3, 1, 3, 1
-    };
 
     player_t player = { 0 };
     vec2f_t direction = { 0 };
@@ -63,17 +81,14 @@ int main() {
     FL_Timer timer = { 0 }, fps_timer = { 0 };
     char player_pos_text[32];
     char fps_text[16] = "FPS: -";
-    FL_Bool first = true;
-
-    vec2f_t mouse = { 0 };
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
         while(FL_GetEvent(&event)) {
             if(event.type == FL_EVENT_KEY_PRESSED) {
                 switch(event.key.code) {
-                    case FL_KEY_d: player.vangle = 0.2f; first = true; break;
-                    case FL_KEY_a: player.vangle = -0.2f; first = true; break;
+                    case FL_KEY_d: player.vangle = 0.2f; break;
+                    case FL_KEY_a: player.vangle = -0.2f; break;
                     case FL_KEY_w: player.move = 1; break;
                     case FL_KEY_s: player.move = -1; break;
                     default: break;
@@ -117,36 +132,15 @@ int main() {
         }
       
         FL_ClearScreen();
-        FL_DrawRect(0, 0, FL_GetWindowWidth(), FL_GetWindowHeight() / 2, 0x444444, true);
-
-        // ==== DRAW MAP ====
-        const int mm_w = 128, mm_h = 128;
-        const int mm_x = FL_GetWindowWidth() - mm_w - 8, mm_y = 8;
-        const float mm_ratio = (float)mm_w / map_width;
-
-        // background
-        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0x4444AA, true);
-        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0, false);
-
-        for(int y = 0; y < map_height; ++y) {
-            for(int x = 0; x < map_width; ++x) {
-                int sx = mm_x + mm_ratio * x, sy = mm_y + mm_ratio * y;
-
-                int tile = map[y * map_width + x];
-                if(tile == 1) {
-                    FL_DrawRect(sx, sy, mm_ratio, mm_ratio, 0xFFFF00, true);
-                } else if(tile == 3) {
-                    FL_DrawRect(sx, sy, mm_ratio, mm_ratio, 0xFF00FF, true);
-                }
-
-                FL_DrawRect(mm_x + mm_ratio * x, mm_y + mm_ratio * y, mm_ratio, mm_ratio, 0, false);
-            }
-        }
+        FL_DrawRect(0, 0, FL_GetWindowWidth(), FL_GetWindowHeight() / 2, 0x444444, true); // ceiling
 
         // ==== DRAW GAME ====
+        const int mm_values_max = 1024;
+        vec2f_t mm_values[1024] = { 0 };
+        int mm_values_size = 0;
+
         const float r = 20;
         const int WALL_HEIGHT = 1;
-        const float fov = 60.f;
         const float step = fov / FL_GetWindowWidth();
         
         const float proj_dist = ((float)FL_GetWindowWidth() / 2) / tan(fov / 2 * PI / 180.f);
@@ -172,11 +166,16 @@ int main() {
                 for(int j = 0; j < r; ++j) {
                     uint8_t c = 255.f;
 
-                    const float distance = absf(player.x - Ax) / cos(current * PI / 180);
+                    const float distance = absf(player.y - Ay) / sin(current * PI / 180);
 
                     int map_x = floor(Ax), map_y = floor(Ay);
                     if(map_x >= 0 && map_x < map_width && map_y >= 0 && map_y < map_height && map[map_y * map_width + map_x] != 0) {
-                        FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 1, (c << 16 | c << 8 | c), true);
+                        if(mm_values_size < mm_values_max) {
+                            mm_values[mm_values_size].x = Ax;
+                            mm_values[mm_values_size++].y = Ay;
+                        }
+                        //FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 1, (c << 16 | c << 8 | c), true);
+
                         h_wall_distance = distance;
                         h_map_x = map_x;
                         h_map_y = map_y;
@@ -205,7 +204,11 @@ int main() {
 
                     int map_x = floor(Ax), map_y = floor(Ay);
                     if(map_x >= 0 && map_x < map_width && map_y >= 0 && map_y < map_height && map[map_y * map_width + map_x] != 0) {
-                        FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 1, (c << 16 | c << 8 | c), true);
+                        if(mm_values_size < mm_values_max) {
+                            mm_values[mm_values_size].x = Ax;
+                            mm_values[mm_values_size++].y = Ay;
+                        }
+                        //FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 1, (c << 16 | c << 8 | c), true);
 
                         v_wall_distance = distance;
                         v_map_x = map_x;
@@ -220,36 +223,55 @@ int main() {
             }
 
             if(absf(h_wall_distance) < absf(v_wall_distance) && absf(h_wall_distance) < r) {
-                const uint32_t color = map[h_map_y * map_width + h_map_x] == 1 ? 0xffff00 : 0xff00ff;
-
-                const float fish = (float)i / FL_GetWindowWidth() * fov;
-                const float cdistance = h_wall_distance * cos((fish-(fov / 2)) * PI / 180);
-                const float height = (float)FL_GetWindowHeight() / cdistance;
-
-                FL_DrawLine(i, (float)FL_GetWindowHeight() / 2 - height / 2, i, (float)FL_GetWindowHeight() / 2 + height / 2, color);
+                draw_column(i, h_wall_distance, h_map_x, h_map_y);
             } else if(absf(v_wall_distance) < absf(h_wall_distance) && absf(v_wall_distance) < r) {
-                const uint32_t color = map[v_map_y * map_width + v_map_x] == 1 ? 0xffff00 : 0xff00ff;
-
-                const float fish = (float)i / FL_GetWindowWidth() * fov;
-                const float cdistance = v_wall_distance * cos((fish-(fov / 2)) * PI / 180);
-                const float height = (float)FL_GetWindowHeight() / cdistance;
-
-                FL_DrawLine(i, (float)FL_GetWindowHeight() / 2 - height / 2, i, (float)FL_GetWindowHeight() / 2 + height / 2, color);
+                draw_column(i, v_wall_distance, v_map_x, v_map_y);
             }
 
             current += step;
             if(current > 360.f) current -= 360.f;
         }
 
+        // ==== DRAW MAP ====
+        const int mm_w = 128, mm_h = 128;
+        const int mm_x = FL_GetWindowWidth() - mm_w - 8, mm_y = 8;
+        const float mm_ratio = (float)mm_w / map_width;
+
+        // background
+        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0x4444AA, true);
+        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0, false);
+
+        for(int y = 0; y < map_height; ++y) {
+            for(int x = 0; x < map_width; ++x) {
+                int sx = mm_x + mm_ratio * x, sy = mm_y + mm_ratio * y;
+
+                int tile = map[y * map_width + x];
+                if(tile == 1) {
+                    FL_DrawRect(sx, sy, mm_ratio, mm_ratio, 0xFFFF00, true);
+                } else if(tile == 3) {
+                    FL_DrawRect(sx, sy, mm_ratio, mm_ratio, 0xFF00FF, true);
+                }
+
+                FL_DrawRect(mm_x + mm_ratio * x, mm_y + mm_ratio * y, mm_ratio, mm_ratio, 0, false);
+            }
+        }
+
+        for(int i = 0; i < mm_values_size; ++i) {
+            vec2f_t *v = &mm_values[i];
+            FL_DrawCircle(mm_x + v->x * mm_ratio, mm_y + v->y * mm_ratio, 1, 0xffffff, true);
+        }
+
         // player
         FL_DrawCircle(mm_x + player.x * mm_ratio, mm_y + player.y * mm_ratio, 2, 0xFF0000, true);
 
-        FL_SetTextColor(0);
-        FL_DrawTextBDF(4, FL_GetWindowHeight() - 28, fps_text, 16, 640, knxt);
-        FL_DrawTextBDF(4, FL_GetWindowHeight() - 52, player_pos_text, 32, 640, knxt);
-
         FL_DrawCircle(mouse.x, mouse.y, 2, 0x0000ff, true);
         FL_DrawLine(mouse.x, 0, mouse.x, FL_GetWindowHeight(), 0x0000ff);
+
+        FL_SetTextColor(0);
+        
+        FL_DrawTextBDF(4, FL_GetWindowHeight() - 28, fps_text, 16, 640, knxt);
+        FL_DrawTextBDF(4, FL_GetWindowHeight() - 52, player_pos_text, 32, 640, knxt);
+        FL_DrawTextBDF(4, FL_GetWindowHeight() - 76, column_info, 64, 640, knxt);
 
         FL_Render();
     }
