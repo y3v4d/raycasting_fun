@@ -26,21 +26,22 @@ const float fov = 60.f;
 const uint32_t map_width = 8, map_height = 8;
 uint8_t map[64] = { 
     1, 3, 1, 3, 1, 3, 1, 3,
-    3, 0, 0, 0, 0, 0, 3, 1,
+    3, 0, 0, 0, 0, 0, 0, 1,
     1, 0, 0, 0, 0, 0, 0, 3,
-    3, 1, 0, 2, 0, 0, 3, 1,
+    3, 0, 0, 2, 0, 0, 0, 1,
     1, 0, 0, 0, 0, 0, 0, 3,
-    3, 0, 0, 1, 3, 0, 0, 1,
-    1, 0, 0, 0, 1, 0, 0, 3,
+    3, 0, 0, 0, 0, 0, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 3,
     3, 1, 3, 1, 3, 1, 3, 1
 };
 
 vec2f_t mouse = { 0 };
-char column_info[64] = "Column: - Distance: -";
+char column_info[64] = "C: - D: -";
+const float grid_size = 32;
 
 void draw_column(int column, float distance, int map_x, int map_y) {
     if(column == mouse.x) {
-        snprintf(column_info, 64, "Column: %d Distance: %f", column, distance);
+        snprintf(column_info, 64, "C: %d D: %f", column, distance);
     }
 
     const uint32_t color = map[map_y * map_width + map_x] == 1 ? 0xffff00 : 0xff00ff;
@@ -51,6 +52,8 @@ void draw_column(int column, float distance, int map_x, int map_y) {
 
     FL_DrawLine(column, (float)FL_GetWindowHeight() / 2 - half_height, column, (float)FL_GetWindowHeight() / 2 + half_height, color);
 }
+
+float tan_table[360];
 
 int main() {
     if(!FL_Initialize(640, 480))
@@ -64,6 +67,19 @@ int main() {
         exit(-1);
     }
 
+    // 270 is inf 180 is 0, 90 is inf 0 is 0
+
+    for(int i = 0; i < 360; ++i) {
+        if(i == 270 || i == 90) {
+            tan_table[i] = 57; 
+        } else if(i == 180 || i == 0) {
+            tan_table[i] = 0.001f;
+        } else {
+            tan_table[i] = tan((float)i * PI / 180.f);
+        }
+    }
+
+   
     player_t player = { 0 };
     vec2f_t direction = { 0 };
 
@@ -72,8 +88,8 @@ int main() {
         for(int x = 0; x < map_width; ++x) {
             if(map[y * map_width + x] == 2) {
                 map[y * map_width + x] = 0;
-                player.x = x + 0.5;
-                player.y = y + 0.5;
+                player.x = x * grid_size;
+                player.y = y * grid_size;
             } 
         }
     }
@@ -81,6 +97,8 @@ int main() {
     FL_Timer timer = { 0 }, fps_timer = { 0 };
     char player_pos_text[32];
     char fps_text[16] = "FPS: -";
+
+    FL_Bool first = true;
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
@@ -118,8 +136,8 @@ int main() {
         direction.x = cos(player.angle * PI / 180.f);
         direction.y = -sin(player.angle * PI / 180.f);
 
-        player.x += player.move * direction.x * 0.005f * dt;
-        player.y += player.move * direction.y * -0.005f * dt;
+        player.x += player.move * direction.x * 0.005f * grid_size * dt;
+        player.y += player.move * direction.y * -0.005f * grid_size * dt;
 
         snprintf(player_pos_text, 32, "X: %.2f Y: %.2f A: %.2f", player.x, player.y, player.angle);
 
@@ -142,8 +160,6 @@ int main() {
         const float r = 20;
         const int WALL_HEIGHT = 1;
         const float step = fov / FL_GetWindowWidth();
-        
-        const float proj_dist = ((float)FL_GetWindowWidth() / 2) / tan(fov / 2 * PI / 180.f);
 
         float current = player.angle - fov / 2;
         if(current < 0) current += 360.f;
@@ -157,10 +173,10 @@ int main() {
             {
                 FL_Bool is_down = current >= 0 && current <= 180;
 
-                const float Xa = -1.f / angle_tan;
-                const float Ya = is_down ? 1 : -1;
+                const float Xa = grid_size / angle_tan;
+                const float Ya = is_down ? grid_size : -grid_size;
 
-                float Ay = (is_down ? floor(player.y) + 1 : floor(player.y) - 0.0001f);
+                float Ay = (is_down ? floor(player.y / grid_size) * grid_size + grid_size : floor(player.y / grid_size) * grid_size - 0.0001f);
                 float Ax = player.x + (player.y - Ay) / -angle_tan;
 
                 for(int j = 0; j < r; ++j) {
@@ -168,22 +184,21 @@ int main() {
 
                     const float distance = absf(player.y - Ay) / sin(current * PI / 180);
 
-                    int map_x = floor(Ax), map_y = floor(Ay);
+                    int map_x = floor(Ax / grid_size), map_y = floor(Ay / grid_size);
                     if(map_x >= 0 && map_x < map_width && map_y >= 0 && map_y < map_height && map[map_y * map_width + map_x] != 0) {
                         if(mm_values_size < mm_values_max) {
-                            mm_values[mm_values_size].x = Ax;
-                            mm_values[mm_values_size++].y = Ay;
+                            mm_values[mm_values_size].x = map_x;
+                            mm_values[mm_values_size++].y = map_y;
                         }
-                        //FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 1, (c << 16 | c << 8 | c), true);
 
-                        h_wall_distance = distance;
+                        h_wall_distance = distance / grid_size;
                         h_map_x = map_x;
                         h_map_y = map_y;
 
                         break;
                     }
 
-                    Ax += is_down ? -Xa : Xa;
+                    Ax += is_down ? Xa : -Xa;
                     Ay += Ya;
                 }
             }
@@ -191,10 +206,10 @@ int main() {
             {
                 FL_Bool is_right = current >= 270 || current <= 90;
 
-                const float Xa = is_right ? 1 : -1;
-                const float Ya = angle_tan;
+                const float Xa = is_right ? grid_size : -grid_size;
+                const float Ya = angle_tan * grid_size;
 
-                float Ax = is_right ? floor(player.x) + 1 : floor(player.x) - 0.0001f;
+                float Ax = is_right ? floor(player.x / grid_size) * grid_size + grid_size : floor(player.x / grid_size) * grid_size - 0.0001f;
                 float Ay = player.y - (Ax - player.x) * -angle_tan;
 
                 for(int j = 0; j < r; ++j) {
@@ -202,15 +217,14 @@ int main() {
 
                     const float distance = absf(player.x - Ax) / cos(current * PI / 180);
 
-                    int map_x = floor(Ax), map_y = floor(Ay);
+                    int map_x = floor(Ax / grid_size), map_y = floor(Ay / grid_size);
                     if(map_x >= 0 && map_x < map_width && map_y >= 0 && map_y < map_height && map[map_y * map_width + map_x] != 0) {
                         if(mm_values_size < mm_values_max) {
                             mm_values[mm_values_size].x = Ax;
                             mm_values[mm_values_size++].y = Ay;
                         }
-                        //FL_DrawCircle(mm_x + Ax * mm_ratio, mm_y + Ay * mm_ratio, 1, (c << 16 | c << 8 | c), true);
 
-                        v_wall_distance = distance;
+                        v_wall_distance = distance / grid_size;
                         v_map_x = map_x;
                         v_map_y = map_y;
 
@@ -262,7 +276,7 @@ int main() {
         }
 
         // player
-        FL_DrawCircle(mm_x + player.x * mm_ratio, mm_y + player.y * mm_ratio, 2, 0xFF0000, true);
+        FL_DrawCircle(mm_x + player.x / grid_size * mm_ratio, mm_y + player.y / grid_size * mm_ratio, 2, 0xFF0000, true);
 
         FL_DrawCircle(mouse.x, mouse.y, 2, 0x0000ff, true);
         FL_DrawLine(mouse.x, 0, mouse.x, FL_GetWindowHeight(), 0x0000ff);
