@@ -25,24 +25,32 @@ typedef struct {
 const float fov = 60.f;
 const uint32_t map_width = 8, map_height = 8;
 uint8_t map[64] = { 
-    1, 3, 1, 3, 1, 3, 1, 3,
+    1, 1, 1, 1, 4, 1, 4, 1,
+    4, 0, 0, 0, 0, 0, 0, 1,
     3, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 3,
-    3, 0, 0, 2, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 3,
-    3, 0, 3, 1, 0, 0, 0, 1,
-    1, 0, 0, 3, 0, 0, 0, 3,
-    3, 1, 3, 1, 3, 1, 3, 1
+    1, 0, 0, 2, 0, 0, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 4,
+    3, 0, 1, 1, 0, 0, 0, 3,
+    1, 0, 0, 4, 0, 0, 0, 4,
+    1, 1, 1, 4, 3, 3, 1, 1
 };
 
 vec2f_t mouse = { 0 };
 char column_info[64] = "C: - D: -";
 const float grid_size = 32;
 
-FL_Texture *texture;
+FL_Texture *wall0, *wall1, *wall2;
 
-uint32_t make_color(int r, int g, int b) {
+uint32_t make_color(uint8_t r, uint8_t g, uint8_t b) {
     return (uint32_t)((uint8_t)r << 16 | (uint8_t)g << 8 | (uint8_t)b);
+}
+
+uint32_t shade_color(uint32_t color, float distance) {
+    uint8_t r = color >> 16, g = color >> 8, b = color;
+
+    float shade = (distance == 0 ? 1 : absf(distance) * 1);
+    uint8_t rs = min(r / shade, 255), gs = min(g / shade, 255), bs = min(b / shade, 255);
+    return (uint32_t)((uint32_t)rs << 16 | (uint32_t)gs << 8 | bs);
 }
 
 void draw_column(int column, float distance, int map_x, int map_y) {
@@ -50,7 +58,7 @@ void draw_column(int column, float distance, int map_x, int map_y) {
         snprintf(column_info, 64, "C: %d D: %f", column, distance);
     }
 
-    const uint32_t shade = min(255.f / absf(distance) * 2, 255);
+    const uint32_t shade = (distance == 0 ? 1 : min(255.f / absf(distance) * 2, 255));
     const uint32_t color = map[map_y * map_width + map_x] == 1 ? make_color(shade, shade, 0) : make_color(shade, 0, shade);
     
     const float fish = (float)column / FL_GetWindowWidth() * fov - fov / 2;
@@ -64,23 +72,46 @@ void draw_textured_column(int column, int offset, float distance, int map_x, int
     if(column == mouse.x) {
         snprintf(column_info, 64, "C: %d D: %f Offset: %d", column, distance, offset);
     }
+
+    FL_Texture *tex;
+    const int tile = map[map_y * map_width + map_x];
+    if(tile == 1) tex = wall0;
+    else if(tile == 3) tex = wall1;
+    else if(tile == 4) tex = wall2;
+    else return;
     
     const float fish = (float)column / FL_GetWindowWidth() * fov - fov / 2;
     const float cdistance = absf(distance * cos(fish * PI / 180));
     const float height = (float)FL_GetWindowHeight() / cdistance;
-    const float half_height = height / 2;
 
-    const float tex_step = grid_size / height;
-    float tex_current = 0;
+    if(height < FL_GetWindowHeight()) {
+        const float half_height = height / 2;
 
-    uint32_t *p = texture->data + offset;
+        const float tex_step = grid_size / height;
+        float tex_current = 0;
 
-    for(int i = (FL_GetWindowHeight() >> 1) - half_height; i < (FL_GetWindowHeight() >> 1) + half_height; ++i) {
-        if(i < 0 || i >= FL_GetWindowHeight()) continue;
+        uint32_t *p = tex->data + offset;
 
-        FL_DrawPoint(column, i, *(p + (int)(floor(tex_current) * texture->width)));
+        for(int i = (FL_GetWindowHeight() >> 1) - half_height; i < (FL_GetWindowHeight() >> 1) + half_height; ++i) {
+            if(i < 0 || i >= FL_GetWindowHeight()) continue;
 
-        tex_current += tex_step;
+            FL_DrawPoint(column, i, shade_color(*(p + (int)(floor(tex_current) * tex->width)), absf(distance)));
+
+            tex_current += tex_step;
+        }
+    } else {
+        const float tex_step = grid_size / height;
+
+        float diff = height - FL_GetWindowHeight();
+        float tex_current = diff / 2 * tex_step;
+
+        uint32_t *p = tex->data + offset;
+        for(int i = 0; i < FL_GetWindowHeight(); ++i) {
+            FL_DrawPoint(column, i, shade_color(*(p + (int)(floor(tex_current) * tex->width)), 1));
+
+            tex_current += tex_step;
+        }
+
     }
 }
 
@@ -98,8 +129,10 @@ int main() {
         exit(-1);
     }
 
-    texture = FL_LoadTexture("data/texture.bmp");
-    if(!texture) {
+    wall0 = FL_LoadTexture("data/wall0.bmp");
+    wall1 = FL_LoadTexture("data/wall1.bmp");
+    wall2 = FL_LoadTexture("data/wall2.bmp");
+    if(!wall0 || !wall1 || !wall2) {
         FL_Close();
         exit(-1);
     }
@@ -332,7 +365,9 @@ int main() {
         FL_Render();
     }
 
-    FL_FreeTexture(texture);
+    FL_FreeTexture(wall0);
+    FL_FreeTexture(wall1);
+    FL_FreeTexture(wall2);
     FL_FreeFontBDF(knxt);
     FL_Close();
 
