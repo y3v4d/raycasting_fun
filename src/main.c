@@ -335,10 +335,8 @@ int main() {
                 int sx = mm_x + mm_ratio * x, sy = mm_y + mm_ratio * y;
 
                 int tile = map[y * map_width + x];
-                if(tile == 1) {
+                if(tile != 0) {
                     FL_DrawRect(sx, sy, mm_ratio, mm_ratio, 0xFFFF00, true);
-                } else if(tile == 3) {
-                    FL_DrawRect(sx, sy, mm_ratio, mm_ratio, 0xFF00FF, true);
                 }
 
                 FL_DrawRect(mm_x + mm_ratio * x, mm_y + mm_ratio * y, mm_ratio, mm_ratio, 0, false);
