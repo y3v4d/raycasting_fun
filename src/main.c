@@ -5,6 +5,8 @@
 #include <time.h>
 #include <math.h>
 
+#define PROJECTION_WIDTH 640
+#define PROJECTION_HEIGHT 480
 #define PI 3.14159
 
 float absf(float x) {
@@ -53,6 +55,23 @@ uint32_t shade_color(uint32_t color, float distance) {
     return (uint32_t)((uint32_t)rs << 16 | (uint32_t)gs << 8 | bs);
 }
 
+
+
+const int ANGLE_0 = 0;
+const int ANGLE_60 = PROJECTION_WIDTH;
+const int ANGLE_30 = ANGLE_60 / 2;
+const int ANGLE_15 = ANGLE_30 / 2;
+const int ANGLE_90 = ANGLE_30 * 3;
+const int ANGLE_180 = ANGLE_60 * 3;
+const int ANGLE_270 = ANGLE_90 * 3;
+const int ANGLE_360 = ANGLE_180 * 2;
+
+float tan_table[3840]; // ANGLE_360 can't seem to work without warnings...
+
+float arctorad(float a) {
+    return a * PI / ANGLE_180;
+}
+
 void draw_column(int column, float distance, int map_x, int map_y) {
     if(column == mouse.x) {
         snprintf(column_info, 64, "C: %d D: %f", column, distance);
@@ -61,11 +80,11 @@ void draw_column(int column, float distance, int map_x, int map_y) {
     const uint32_t shade = (distance == 0 ? 1 : min(255.f / absf(distance) * 2, 255));
     const uint32_t color = map[map_y * map_width + map_x] == 1 ? make_color(shade, shade, 0) : make_color(shade, 0, shade);
     
-    const float fish = (float)column / FL_GetWindowWidth() * fov - fov / 2;
-    const float cdistance = absf(distance * cos(fish * PI / 180));
-    const float half_height = (float)FL_GetWindowHeight() / cdistance / 2;
+    const float fish = (float)column / PROJECTION_WIDTH * ANGLE_60 - ANGLE_30;
+    const float cdistance = absf(distance * cos(arctorad(fish)));
+    const float half_height = (float)PROJECTION_HEIGHT / cdistance / 2;
 
-    FL_DrawLine(column, (FL_GetWindowHeight() >> 1) - half_height, column, (FL_GetWindowHeight() >> 1) + half_height, color);
+    FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) - half_height, column, (PROJECTION_HEIGHT >> 1) + half_height, color);
 }
 
 void draw_textured_column(int column, int offset, float distance, int map_x, int map_y) {
@@ -80,42 +99,45 @@ void draw_textured_column(int column, int offset, float distance, int map_x, int
     else if(tile == 4) tex = wall2;
     else return;
     
-    const float fish = (float)column / FL_GetWindowWidth() * fov - fov / 2;
-    const float cdistance = absf(distance * cos(fish * PI / 180));
-    const float height = (float)FL_GetWindowHeight() / cdistance;
+    const float fish = (float)column / PROJECTION_WIDTH * ANGLE_60 - ANGLE_30;
+    const float cdistance = absf(distance * cos(arctorad(fish)));
+    const float height = (float)PROJECTION_HEIGHT / cdistance;
 
-    if(height < FL_GetWindowHeight()) {
+    if(height < PROJECTION_HEIGHT) {
         const float half_height = height / 2;
 
         const float tex_step = grid_size / height;
         float tex_current = 0;
 
         uint32_t *p = tex->data + offset;
+        for(int i = floor((PROJECTION_HEIGHT >> 1) - half_height); i < floor((PROJECTION_HEIGHT >> 1) + half_height); ++i) {
+            uint32_t color = *(p + (int)(floor(tex_current) * tex->width));
+            uint8_t r = color >> 16, g = color >> 8, b = color;
 
-        for(int i = (FL_GetWindowHeight() >> 1) - half_height; i < (FL_GetWindowHeight() >> 1) + half_height; ++i) {
-            if(i < 0 || i >= FL_GetWindowHeight()) continue;
+            float brightness = 1.f / absf(cdistance);
+            r *= brightness;
+            g *= brightness;
+            b *= brightness;
 
-            FL_DrawPoint(column, i, shade_color(*(p + (int)(floor(tex_current) * tex->width)), absf(distance)));
+            FL_DrawPoint(column, i, (uint32_t)(r << 16 | g << 8 | b));
 
             tex_current += tex_step;
         }
     } else {
         const float tex_step = grid_size / height;
-
-        float diff = height - FL_GetWindowHeight();
+        
+        float diff = height - PROJECTION_HEIGHT;
         float tex_current = diff / 2 * tex_step;
 
         uint32_t *p = tex->data + offset;
-        for(int i = 0; i < FL_GetWindowHeight(); ++i) {
-            FL_DrawPoint(column, i, shade_color(*(p + (int)(floor(tex_current) * tex->width)), 1));
+        for(int i = 0; i < PROJECTION_HEIGHT; ++i) {
+            FL_DrawPoint(column, i, *(p + (int)(floor(tex_current) * tex->width)));
 
             tex_current += tex_step;
         }
 
     }
 }
-
-float tan_table[360];
 
 int main() {
     if(!FL_Initialize(640, 480))
@@ -137,18 +159,6 @@ int main() {
         exit(-1);
     }
 
-    // 270 is inf 180 is 0, 90 is inf 0 is 0
-    for(int i = 0; i < 360; ++i) {
-        if(i == 270 || i == 90) {
-            tan_table[i] = 57; 
-        } else if(i == 180 || i == 0) {
-            tan_table[i] = 0.001f;
-        } else {
-            tan_table[i] = tan((float)i * PI / 180.f);
-        }
-    }
-
-   
     player_t player = { 0 };
     vec2f_t direction = { 0 };
 
@@ -159,11 +169,15 @@ int main() {
                 map[y * map_width + x] = 0;
                 player.x = x * grid_size;
                 player.y = y * grid_size;
-            } 
+            }
         }
     }
 
-    FL_Timer timer = { 0 }, fps_timer = { 0 };
+    for(int i = 0; i < ANGLE_360; ++i) {
+        tan_table[i] = tan(arctorad(i));
+    }
+
+    FL_Timer fps_timer = { 0 };
     char player_pos_text[32];
     char fps_text[16] = "FPS: -";
 
@@ -174,15 +188,15 @@ int main() {
         while(FL_GetEvent(&event)) {
             if(event.type == FL_EVENT_KEY_PRESSED) {
                 switch(event.key.code) {
-                    case FL_KEY_d: player.vangle = 0.2f; break;
-                    case FL_KEY_a: player.vangle = -0.2f; break;
+                    case FL_KEY_d: player.vangle = 3; break;
+                    case FL_KEY_a: player.vangle = -3; break;
                     case FL_KEY_w: player.move = 1; break;
                     case FL_KEY_s: player.move = -1; break;
                     default: break;
                 }
             } else if(event.type == FL_EVENT_KEY_RELEASED) {
                 switch(event.key.code) {
-                    case FL_KEY_d: case FL_KEY_a: player.vangle = 0.f; break;
+                    case FL_KEY_d: case FL_KEY_a: player.vangle = 0; break;
                     case FL_KEY_w: case FL_KEY_s: player.move = 0; break;
                     default: break;
                 }
@@ -192,18 +206,15 @@ int main() {
             }
         }
 
-        // get delta time
-        FL_StopTimer(&timer);
-        const float dt = timer.delta;
-        FL_StartTimer(&timer);
+        const float dt = FL_GetDeltaTime();
 
         // movement
         player.angle += player.vangle * dt;
-        if(player.angle < 0) player.angle += 360.f;
-        else if(player.angle > 360.f) player.angle -= 360.f;
+        if(player.angle < 0) player.angle += ANGLE_360;
+        else if(player.angle >= ANGLE_360) player.angle -= ANGLE_360;
 
-        direction.x = cos(player.angle * PI / 180.f);
-        direction.y = -sin(player.angle * PI / 180.f);
+        direction.x = cos(arctorad(player.angle));
+        direction.y = -sin(arctorad(player.angle));
 
         player.x += player.move * direction.x * 0.005f * grid_size * dt;
         player.y += player.move * direction.y * -0.005f * grid_size * dt;
@@ -213,14 +224,14 @@ int main() {
         // display fps on screen
         FL_StopTimer(&fps_timer);
         if(fps_timer.delta >= 500) {
-            snprintf(fps_text, 16, "FPS: %.2f", 1000.f / timer.delta);
+            snprintf(fps_text, 16, "FPS: %.2f", 1000.f / dt);
 
             FL_StartTimer(&fps_timer);
         }
       
         FL_ClearScreen();
          // ceiling
-        FL_DrawRect(0, 0, FL_GetWindowWidth(), FL_GetWindowHeight() / 2, 0x444444, true);
+        FL_DrawRect(0, 0, PROJECTION_WIDTH, PROJECTION_HEIGHT / 2, 0x444444, true);
 
         // ==== DRAW GAME ====
         const int mm_values_max = 1024;
@@ -229,20 +240,20 @@ int main() {
 
         const float r = 20;
         const int WALL_HEIGHT = 1;
-        const float step = fov / FL_GetWindowWidth();
+        const float step = fov / PROJECTION_WIDTH;
 
-        float current = round(player.angle) - fov / 2;
-        if(current < 0) current += 360.f;
+        int current = (int)floor(player.angle) - ANGLE_30;
+        if(current < 0) current += ANGLE_360;
 
-        for(int i = 0; i < FL_GetWindowWidth(); i++) {
+        for(int i = 0; i < PROJECTION_WIDTH; i++) {
             int v_map_x = -1, v_map_y = -1, h_map_x = -1, h_map_y = -1;
             float v_wall_distance = 999999.f, h_wall_distance = 999999.f;
             int v_offset = -1, h_offset = -1;
 
-            const float angle_tan = tan(current * PI / 180);
+            const float angle_tan = tan_table[current];
 
             {
-                FL_Bool is_down = current >= 0 && current <= 180;
+                FL_Bool is_down = current >= ANGLE_0 && current <= ANGLE_180;
 
                 const float Xa = grid_size / angle_tan;
                 const float Ya = is_down ? grid_size : -grid_size;
@@ -251,7 +262,7 @@ int main() {
                 float Ax = player.x + (player.y - Ay) / -angle_tan;
 
                 for(int j = 0; j < r; ++j) {
-                    const float distance = absf(player.y - Ay) / sin(current * PI / 180);
+                    const float distance = absf(player.y - Ay) / sin(arctorad(current));
 
                     int map_x = floor(Ax / grid_size), map_y = floor(Ay / grid_size);
 
@@ -276,7 +287,7 @@ int main() {
             }
 
             {
-                FL_Bool is_right = current >= 270 || current <= 90;
+                FL_Bool is_right = current >= ANGLE_270 || current <= ANGLE_90;
 
                 const float Xa = is_right ? grid_size : -grid_size;
                 const float Ya = angle_tan * grid_size;
@@ -285,7 +296,7 @@ int main() {
                 float Ay = player.y - (Ax - player.x) * -angle_tan;
 
                 for(int j = 0; j < r; ++j) {
-                    const float distance = absf(player.x - Ax) / cos(current * PI / 180);
+                    const float distance = absf(player.x - Ax) / cos(arctorad(current));
 
                     int map_x = floor(Ax / grid_size), map_y = floor(Ay / grid_size);
                     if(map_x < 0 || map_x >= map_width || map_y < 0 || map_y >= map_height) break; // ray went out of map
@@ -317,13 +328,13 @@ int main() {
                 draw_textured_column(i, v_offset, v_wall_distance, v_map_x, v_map_y);
             }
 
-            current += step;
-            if(current > 360.f) current -= 360.f;
+            current += 1;
+            if(current >= ANGLE_360) current -= ANGLE_360;
         }
 
         // ==== DRAW MAP ====
-        const int mm_w = 128, mm_h = 128;
-        const int mm_x = FL_GetWindowWidth() - mm_w - 8, mm_y = 8;
+        const int mm_w = PROJECTION_WIDTH / 8, mm_h = PROJECTION_WIDTH / 8;
+        const int mm_x = PROJECTION_WIDTH - mm_w - 8, mm_y = 8;
         const float mm_ratio = (float)mm_w / map_width;
 
         // background
@@ -352,13 +363,13 @@ int main() {
         FL_DrawCircle(mm_x + player.x / grid_size * mm_ratio, mm_y + player.y / grid_size * mm_ratio, 2, 0xFF0000, true);
 
         FL_DrawCircle(mouse.x, mouse.y, 2, 0x0000ff, true);
-        FL_DrawLine(mouse.x, 0, mouse.x, FL_GetWindowHeight(), 0x0000ff);
+        FL_DrawLine(mouse.x, 0, mouse.x, PROJECTION_HEIGHT, 0x0000ff);
 
         FL_SetTextColor(0);
         
-        FL_DrawTextBDF(4, FL_GetWindowHeight() - 28, fps_text, 16, 640, knxt);
-        FL_DrawTextBDF(4, FL_GetWindowHeight() - 52, player_pos_text, 32, 640, knxt);
-        FL_DrawTextBDF(4, FL_GetWindowHeight() - 76, column_info, 64, 640, knxt);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, fps_text, 16, 640, knxt);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, player_pos_text, 32, 640, knxt);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 76, column_info, 64, 640, knxt);
 
         FL_Render();
     }
