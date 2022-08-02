@@ -7,7 +7,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(raycasting src/main.c)
 
+target_sources(raycasting PUBLIC src/map.c)
+target_include_directories(raycasting PRIVATE include)
 target_include_directories(raycasting PRIVATE libs/follia)
 find_library(follia NAMES follia PATHS libs REQUIRED)
 
 target_link_libraries(raycasting PRIVATE -lm ${follia})
+
+add_subdirectory(editor)

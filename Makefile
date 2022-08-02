@@ -1,4 +1,4 @@
-.PHONY: cmake compile run
+.PHONY: cmake compile run editor
 
 cmake:
 	cmake -B build
