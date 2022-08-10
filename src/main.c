@@ -5,6 +5,7 @@
 #include <time.h>
 #include <math.h>
 
+#include "core/fl_system.h"
 #include "map.h"
 
 #define PROJECTION_WIDTH 640
@@ -74,12 +75,6 @@ void draw_textured_column(int column, int offset, float distance, FL_Texture *te
     if(column == mouse.x) {
         snprintf(column_info, 64, "C: %d D: %f Offset: %d", column, distance, offset);
     }
-
-    /*const int tile = map[map_y * map_width + map_x];
-    if(tile == 1) tex = wall0;
-    else if(tile == 3) tex = wall1;
-    else if(tile == 4) tex = wall2;
-    else return;*/
     
     const float fish = (float)column / PROJECTION_WIDTH * ANGLE_60 - ANGLE_30;
     const float cdistance = absf(distance * cos(arctorad(fish)));
@@ -90,13 +85,13 @@ void draw_textured_column(int column, int offset, float distance, FL_Texture *te
 
         const float tex_step = grid_size / height;
         float tex_current = 0;
+        float brightness = 1.f / absf(cdistance);
 
         uint32_t *p = texture->data + offset;
         for(int i = floor((PROJECTION_HEIGHT >> 1) - half_height); i < floor((PROJECTION_HEIGHT >> 1) + half_height); ++i) {
-            uint32_t color = *(p + (int)(floor(tex_current) * texture->width));
+            uint32_t color = *(p + (int)(floor(tex_current)) * texture->width);
             uint8_t r = color >> 16, g = color >> 8, b = color;
 
-            float brightness = 1.f / absf(cdistance);
             r *= brightness;
             g *= brightness;
             b *= brightness;
@@ -106,7 +101,8 @@ void draw_textured_column(int column, int offset, float distance, FL_Texture *te
             tex_current += tex_step;
         }
 
-        FL_DrawLine(column, 0, column, floor((PROJECTION_HEIGHT >> 1) - half_height) - 1, 0x666666);
+        FL_DrawLine(column, 0, column, (PROJECTION_HEIGHT >> 1) - half_height - 1, 0x666666);
+        FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) + half_height, column, PROJECTION_HEIGHT - 1, 0x888888);
     } else {
         const float tex_step = grid_size / height;
         
@@ -122,11 +118,29 @@ void draw_textured_column(int column, int offset, float distance, FL_Texture *te
     }
 }
 
+#define MAX_STRING 512
+#define AVERAGE_COUNT 16
+
+double average_array(double *a, int p) {
+    double total = 0;
+    for(int i = 0; i < p; ++i) {
+        total += a[i];
+    }
+
+    return total / p;
+}
+
 int main() {
+    int averages_counter = 0;
+    double averages[FL_TIMER_ALL + 1][AVERAGE_COUNT];
+    char info_text[MAX_STRING];
+
     if(!FL_Initialize(640, 480))
         exit(-1);
 
     FL_SetTitle("Raycasting Test");
+    FL_SetFrameTime(16.6);
+    FL_SetTextColor(0);
 
     map_t *map = map_load("data/map0.data");
     if(!map) {
@@ -158,11 +172,7 @@ int main() {
         cos_table[i] = cos(arctorad(i));
     }
 
-    FL_Timer fps_timer = { 0 };
     char player_pos_text[32];
-    char fps_text[16] = "FPS: -";
-
-    FL_Bool first = true;
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
@@ -171,8 +181,8 @@ int main() {
                 switch(event.key.code) {
                     case FL_KEY_d: player.vangle = 2; break;
                     case FL_KEY_a: player.vangle = -2; break;
-                    case FL_KEY_w: player.move = 1; break;
-                    case FL_KEY_s: player.move = -1; break;
+                    case FL_KEY_w: player.move = 0.5; break;
+                    case FL_KEY_s: player.move = -0.5; break;
                     default: break;
                 }
             } else if(event.type == FL_EVENT_KEY_RELEASED) {
@@ -189,6 +199,25 @@ int main() {
 
         const float dt = FL_GetDeltaTime();
 
+        averages[FL_TIMER_CLEAR_SCREEN][averages_counter] = FL_GetCoreTimer(FL_TIMER_CLEAR_SCREEN);
+        averages[FL_TIMER_RENDER][averages_counter] = FL_GetCoreTimer(FL_TIMER_RENDER);
+        averages[FL_TIMER_CLEAR_TO_RENDER][averages_counter] = FL_GetCoreTimer(FL_TIMER_CLEAR_TO_RENDER);
+        averages[FL_TIMER_ALL][averages_counter] = FL_GetCoreTimer(FL_TIMER_ALL);
+        ++averages_counter;
+
+        if(averages_counter >= AVERAGE_COUNT) averages_counter = 0;
+
+        snprintf(
+            info_text, MAX_STRING, 
+            "Clear: %f\nRender: %f\nClear to render: %f\nAll: %f\nDelta: %f\nFPS: %f",
+            average_array(averages[FL_TIMER_CLEAR_SCREEN], AVERAGE_COUNT),
+            average_array(averages[FL_TIMER_RENDER], AVERAGE_COUNT),
+            average_array(averages[FL_TIMER_CLEAR_TO_RENDER], AVERAGE_COUNT),
+            average_array(averages[FL_TIMER_ALL], AVERAGE_COUNT),
+            dt,
+            1000.0 / dt
+        );
+
         // movement
         player.angle += player.vangle * dt;
         if(player.angle < 0) player.angle += ANGLE_360;
@@ -197,17 +226,11 @@ int main() {
         direction.x = cos_table[(int)player.angle];
         direction.y = -sin_table[(int)player.angle];
 
-        player.x += player.move * direction.x * 0.005f * grid_size * dt;
-        player.y += player.move * direction.y * -0.005f * grid_size * dt;
+        if(player.move != 0) {
+            player.x += player.move * direction.x * 0.005f * grid_size * dt;
+            player.y += player.move * direction.y * -0.005f * grid_size * dt;
 
-        snprintf(player_pos_text, 32, "X: %.2f Y: %.2f A: %.2f", player.x, player.y, player.angle);
-
-        // display fps on screen
-        FL_StopTimer(&fps_timer);
-        if(fps_timer.delta >= 500) {
-            snprintf(fps_text, 16, "FPS: %.2f", 1000.f / dt);
-
-            FL_StartTimer(&fps_timer);
+            snprintf(player_pos_text, 32, "X: %.2f Y: %.2f A: %.2f", player.x, player.y, player.angle);
         }
       
         FL_ClearScreen();
@@ -342,12 +365,10 @@ int main() {
 
         FL_DrawCircle(mouse.x, mouse.y, 2, 0x0000ff, true);
         FL_DrawLine(mouse.x, 0, mouse.x, PROJECTION_HEIGHT, 0x0000ff);
-
-        FL_SetTextColor(0);
         
-        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, fps_text, 16, 640, knxt);
-        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, player_pos_text, 32, 640, knxt);
-        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 76, column_info, 64, 640, knxt);
+        FL_DrawTextBDF(8, 8, info_text, MAX_STRING, FL_GetWindowWidth() - 16, knxt);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, player_pos_text, 32, 640, knxt);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, column_info, 64, 640, knxt);
 
         FL_Render();
     }

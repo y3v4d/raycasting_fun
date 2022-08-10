@@ -13,5 +13,6 @@ target_include_directories(raycasting PRIVATE libs/follia)
 find_library(follia NAMES follia PATHS libs REQUIRED)
 
 target_link_libraries(raycasting PRIVATE -lm ${follia})
+target_compile_options(raycasting PRIVATE -O2)
 
 add_subdirectory(editor)
