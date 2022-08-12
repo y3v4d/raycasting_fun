@@ -33,10 +33,8 @@ vec2f_t mouse = { 0 };
 char column_info[64] = "C: - D: -";
 const float grid_size = 32;
 
-FL_Texture *wall0, *wall1, *wall2;
-
 uint32_t make_color(uint8_t r, uint8_t g, uint8_t b) {
-    return (uint32_t)((uint8_t)r << 16 | (uint8_t)g << 8 | (uint8_t)b);
+    return (uint32_t)(r << 16 | g << 8 | b);
 }
 
 const int ANGLE_0 = 0;
@@ -155,6 +153,7 @@ int main() {
         exit(-1);
     }
 
+    FL_Texture *wall0, *wall1, *wall2;
     wall0 = FL_LoadTexture("data/wall0.bmp");
     wall1 = FL_LoadTexture("data/wall1.bmp");
     wall2 = FL_LoadTexture("data/wall2.bmp");
@@ -226,12 +225,10 @@ int main() {
         direction.x = cos_table[(int)player.angle];
         direction.y = -sin_table[(int)player.angle];
 
-        if(player.move != 0) {
-            player.x += player.move * direction.x * 0.005f * grid_size * dt;
-            player.y += player.move * direction.y * -0.005f * grid_size * dt;
+        player.x += player.move * direction.x * 0.005f * grid_size * dt;
+        player.y += player.move * direction.y * -0.005f * grid_size * dt;
 
-            snprintf(player_pos_text, 32, "X: %.2f Y: %.2f A: %.2f", player.x, player.y, player.angle);
-        }
+        snprintf(player_pos_text, 32, "X: %.2f Y: %.2f A: %.2f", player.x, player.y, player.angle);
       
         FL_ClearScreen();
 
@@ -338,8 +335,8 @@ int main() {
         const float mm_ratio = (float)mm_w / map->width;
 
         // background
-        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0x4444AA, true);
-        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0, false);
+        //FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0x4444AA, true);
+        //FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0, false);
 
         for(int y = 0; y < map->height; ++y) {
             for(int x = 0; x < map->width; ++x) {

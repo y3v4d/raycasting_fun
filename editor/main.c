@@ -68,8 +68,7 @@ int main(int argc, char **argv) {
     int grid_size = 32;
     vec2f_t position = { 0, 0 };
 
-    FL_Bool mouse_clicked = false;
-    FL_Bool cancel_place = false;
+    FL_Bool is_moving = false;
     vec2i_t mouse_pos = { 0 };
     vec2i_t mouse_delta = { 0 };
     const float SPEED = 1.2f;
@@ -78,7 +77,6 @@ int main(int argc, char **argv) {
     while(!FL_WindowShouldClose()) {
         while(FL_GetEvent(&event)) {
             if(event.type == FL_EVENT_MOUSE_MOVED) {
-                cancel_place = true;
                 mouse_delta.x = event.mouse.x - mouse_pos.x;
                 mouse_delta.y = event.mouse.y - mouse_pos.y;
 
@@ -87,23 +85,22 @@ int main(int argc, char **argv) {
             } else if(event.type == FL_EVENT_MOUSE_PRESSED) {
                 if(event.mouse.button == 4) grid_size++;
                 else if(event.mouse.button == 5 && grid_size > 0) grid_size--;
-                else if(event.mouse.button == 1) {
-                    cancel_place = false;
-                    mouse_clicked = true;
+                else if(event.mouse.button == 3) {
+                    is_moving = true;
                 }
-            } else if(event.type == FL_EVENT_MOUSE_RELEASED && event.mouse.button == 1) {
-                mouse_clicked = false;
+            } else if(event.type == FL_EVENT_MOUSE_RELEASED) {
+                if(event.mouse.button == 1) {
+                    int mx = floorf((mouse_pos.x - position.x) / grid_size), my = floorf((mouse_pos.y - position.y) / grid_size);
 
-                if(cancel_place) continue;
-
-                int mx = floorf((mouse_pos.x - position.x) / grid_size), my = floorf((mouse_pos.y - position.y) / grid_size);
-
-                if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
-                map->data[my * map->width + mx] = !map->data[my * map->width + mx];
+                    if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
+                    map->data[my * map->width + mx] = !map->data[my * map->width + mx];
+                } else if(event.mouse.button == 3) {
+                    is_moving = false;
+                }
             }
         }
 
-        if(mouse_clicked) {
+        if(is_moving) {
             position.x += mouse_delta.x;
             position.y += mouse_delta.y;
         }
