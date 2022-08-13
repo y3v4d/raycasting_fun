@@ -5,6 +5,7 @@
 #include <time.h>
 #include <math.h>
 
+#include "core/fl_key.h"
 #include "debug.h"
 #include "map.h"
 #include "renderer.h"
@@ -15,9 +16,7 @@ float absf(float x) {
     return x < 0 ? -x : x;
 }
 
-typedef struct {
-    float x, y;
-} vec2f_t;
+
 
 typedef struct {
     int x, y;
@@ -58,25 +57,28 @@ int main() {
     const float fov = 60.f;
     vec2f_t mouse = { 0 };
 
-    player_t player = { .x = 5 * GRID_SIZE, .y = 5 * GRID_SIZE };
+    player_t player = { .x = 12 * GRID_SIZE, .y = 7 * GRID_SIZE, .angle = ANGLE_90 };
     vec2f_t direction = { 0 };
 
     entity_t entity = {
-        .x = 10 * GRID_SIZE,
-        .y = 5 * GRID_SIZE
+        .x = 12 * GRID_SIZE,
+        .y = 8 * GRID_SIZE
     };
 
     char column_info[64] = "C: - D: -";
-    char player_pos_text[32];
+    char player_info_text[128];
     char stats_text[512];
 
     minimap_t minimap = {
-        .w = PROJECTION_WIDTH / 8,
+        .w = PROJECTION_WIDTH / 4,
         .y = 8,
         .map = map,
         .player = &player,
-        .entity = &entity
+        .entity = &entity,
+        .points_count = 0
     };
+
+    float h_move = 0;
 
     minimap.x = PROJECTION_WIDTH - minimap.w - 8;
     minimap.h = minimap.w;
@@ -90,12 +92,15 @@ int main() {
                     case FL_KEY_a: player.vangle = -2; break;
                     case FL_KEY_w: player.move = 0.5; break;
                     case FL_KEY_s: player.move = -0.5; break;
+                    case FL_KEY_z: h_move = -0.5; break;
+                    case FL_KEY_x: h_move = 0.5; break;
                     default: break;
                 }
             } else if(event.type == FL_EVENT_KEY_RELEASED) {
                 switch(event.key.code) {
                     case FL_KEY_d: case FL_KEY_a: player.vangle = 0; break;
                     case FL_KEY_w: case FL_KEY_s: player.move = 0; break;
+                    case FL_KEY_z: case FL_KEY_x: h_move = 0; break;
                     default: break;
                 }
             } else if(event.type == FL_EVENT_MOUSE_MOVED) {
@@ -116,10 +121,15 @@ int main() {
         direction.x = cos_table[(int)player.angle];
         direction.y = -sin_table[(int)player.angle];
 
+        player.dx = direction.x;
+        player.dy = direction.y;
+
         player.x += player.move * direction.x * 0.005f * GRID_SIZE * dt;
         player.y += player.move * direction.y * -0.005f * GRID_SIZE * dt;
 
-        snprintf(player_pos_text, 32, "X: %.2f Y: %.2f A: %.2f", player.x, player.y, player.angle);
+        player.x += h_move * direction.y * 0.005f * GRID_SIZE * dt;
+
+        snprintf(player_info_text, 128, "X: %.2f Y: %.2f A: %.2f Dx: %.2f Dy: %.2f", player.x, player.y, player.angle, direction.x, direction.y);
       
         FL_ClearScreen();
 
@@ -145,6 +155,8 @@ int main() {
             .y = floor(entity.y / GRID_SIZE) * GRID_SIZE
         };
 
+        int counter = 0;
+
         // === DRAW WALLS ===
         for(int i = 0; i < PROJECTION_WIDTH; i++) {
             int v_map_x = -1, v_map_y = -1, h_map_x = -1, h_map_y = -1;
@@ -154,7 +166,7 @@ int main() {
             {
                 FL_Bool is_down = current >= ANGLE_0 && current <= ANGLE_180;
 
-                const float Xa = GRID_SIZE / tan_table[current];
+                const float Xa = (float)GRID_SIZE / tan_table[current];
                 const float Ya = is_down ? GRID_SIZE : -GRID_SIZE;
 
                 float Ay = (is_down ? player_grid_pos.y + GRID_SIZE : player_grid_pos.y - 0.0001f);
@@ -163,7 +175,7 @@ int main() {
                 for(int j = 0; j < r; ++j) {
                     const float distance = absf(player.y - Ay) / sin_table[current];
 
-                    int map_x = floor(Ax / GRID_SIZE), map_y = floor(Ay / GRID_SIZE);
+                    int map_x = floorf(Ax / GRID_SIZE), map_y = floorf(Ay / GRID_SIZE);
 
                     if(map_x < 0 || map_x >= map->width || map_y < 0 || map_y >= map->height) break; // ray went out of map
                     if(map->data[map_y * map->height + map_x] != 0) {
@@ -171,6 +183,8 @@ int main() {
                             mm_values[mm_values_size].x = map_x;
                             mm_values[mm_values_size++].y = map_y;
                         }*/
+
+                        counter++;
 
                         h_offset = absf(Ax - map_x * GRID_SIZE);
                         h_wall_distance = distance;
@@ -219,15 +233,15 @@ int main() {
                 }
             }
 
-            if(absf(h_wall_distance) < absf(v_wall_distance) && absf(h_wall_distance) < r * GRID_SIZE) {
-                //draw_column(i, h_wall_distance, h_map_x, h_map_y);
+            if(/*absf(h_wall_distance) < absf(v_wall_distance) && */absf(h_wall_distance) < r * GRID_SIZE) {
+                //r_draw_column(i, h_wall_distance, 0xff0000);
                 r_draw_column_textured(i, h_offset, h_wall_distance, wall0);
                 if(i == mouse.x) {
                     snprintf(column_info, 64, "C: %d D: %f Offset: %d", i, h_wall_distance, h_offset);
                 }
             } else if(absf(v_wall_distance) < absf(h_wall_distance) && absf(v_wall_distance) < r * GRID_SIZE) {
-                //draw_column(i, v_wall_distance, v_map_x, v_map_y);
-                r_draw_column_textured(i, v_offset, v_wall_distance, wall0);
+                //r_draw_column(i, v_wall_distance, 0xff0000);
+                //r_draw_column_textured(i, v_offset, v_wall_distance, wall0);
                 if(i == mouse.x) {
                     snprintf(column_info, 64, "C: %d D: %f Offset: %d", i, v_wall_distance, v_offset);
                 }
@@ -237,19 +251,30 @@ int main() {
             if(current >= ANGLE_360) current -= ANGLE_360;
         }
 
+        printf("counter is %d\n", counter);
+
         // === DRAW ENTITIES ===
         {
-            vec2f_t rel_pos = {
+            const float proj_distance = (float)PROJECTION_WIDTH / 2 / tan_table[ANGLE_30];
+            vec2f_t Z = {
                 .x = entity.x - player.x,
                 .y = entity.y - player.y
             };
 
-            printf("Position relative entity: %f %f\n", rel_pos.x, rel_pos.y);
+            vec2f_t T = {
+                .x = Z.x * direction.y + Z.y * direction.x,
+                .y = Z.y * direction.y - Z.x * direction.x
+            };
 
-            float dist = sqrtf(rel_pos.x * rel_pos.x + rel_pos.y * rel_pos.y);
-            printf("Distance entity: %f\n", dist);
+            printf("Distance %f\n", sqrtf(Z.x * Z.x + Z.y * Z.y));
 
-            //r_draw_column((float)PROJECTION_WIDTH / 2 + rel_pos.y, dist / GRID_SIZE, 0xffff00);
+            //printf("Z (%f %f)\n", Z.x, Z.y);
+            //printf("T (%f %f) Sum %f\n", T.x, T.y, T.x + T.y);
+
+            const float x = floorf((float)PROJECTION_WIDTH / 2 + proj_distance * Z.x / -Z.y);
+
+            //r_draw_column(x, d, 0xffff00);
+            if(T.x + T.y < 0) FL_DrawLine(x, 0, x, FL_GetWindowHeight() - 1, 0xffff00);
         }
 
         // ==== DRAW MAP ====
@@ -263,7 +288,7 @@ int main() {
         FL_DrawLine(mouse.x, 0, mouse.x, PROJECTION_HEIGHT, 0x0000ff);
         
         FL_DrawTextBDF(8, 8, stats_text, 512, FL_GetWindowWidth() - 16, knxt);
-        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, player_pos_text, 32, 640, knxt);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, player_info_text, 128, 640, knxt);
         FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, column_info, 64, 640, knxt);
 
         FL_Render();

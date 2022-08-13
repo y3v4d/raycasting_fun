@@ -11,14 +11,16 @@ float absf(float n) {
 
 inline __attribute__((always_inline))
 float apply_fish(int column, float distance) {
+    //return distance;
     const float fish = (float)column / PROJECTION_WIDTH * ANGLE_60 - ANGLE_30;
     return distance * cos(arctorad(fish));
 }
 
 void r_draw_column(int column, float distance, uint32_t color) {
+    const float proj_distance = (float)PROJECTION_WIDTH / 2 / tan_table[ANGLE_30];
     //const uint32_t shade = (distance == 0 ? 1 : min(255.f / absf(distance) * 2, 255));
     const float cdistance = absf(apply_fish(column, distance));
-    const float half_height = (float)PROJECTION_HEIGHT / cdistance / 2;
+    const float half_height = (float)GRID_SIZE / cdistance * proj_distance / 2;
 
     FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) - half_height, column, (PROJECTION_HEIGHT >> 1) + half_height, color);
 }

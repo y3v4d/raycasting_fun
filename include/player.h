@@ -5,6 +5,8 @@ typedef struct {
     float x, y;
     float angle, vangle;
 
+    float dx, dy;
+
     float move;
 } player_t;
 
