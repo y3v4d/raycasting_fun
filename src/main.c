@@ -9,6 +9,7 @@
 #include "map.h"
 #include "renderer.h"
 #include "tables.h"
+#include "minimap.h"
 
 float absf(float x) {
     return x < 0 ? -x : x;
@@ -21,13 +22,6 @@ typedef struct {
 typedef struct {
     int x, y;
 } vec2i_t;
-
-typedef struct {
-    float x, y;
-    float angle, vangle;
-
-    float move;
-} player_t;
 
 int main() {
     if(!FL_Initialize(640, 480))
@@ -59,21 +53,27 @@ int main() {
         exit(-1);
     }
 
+    tables_init();
+
     const float fov = 60.f;
     vec2f_t mouse = { 0 };
 
     player_t player = { .x = 5 * GRID_SIZE, .y = 5 * GRID_SIZE };
     vec2f_t direction = { 0 };
 
-    for(int i = 0; i < ANGLE_360; ++i) {
-        tan_table[i] = tan(arctorad(i));
-        sin_table[i] = sin(arctorad(i));
-        cos_table[i] = cos(arctorad(i));
-    }
-
     char column_info[64] = "C: - D: -";
     char player_pos_text[32];
     char stats_text[512];
+
+    minimap_t minimap = {
+        .w = PROJECTION_WIDTH / 8,
+        .y = 8,
+        .map = map,
+        .player = &player
+    };
+
+    minimap.x = PROJECTION_WIDTH - minimap.w - 8;
+    minimap.h = minimap.w;
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
@@ -118,9 +118,9 @@ int main() {
         FL_ClearScreen();
 
         // ==== DRAW GAME ====
-        const int mm_values_max = 1024;
+        /*const int mm_values_max = 1024;
         vec2f_t mm_values[1024] = { 0 };
-        int mm_values_size = 0;
+        int mm_values_size = 0;*/
 
         const float r = 20;
         const int WALL_HEIGHT = 1;
@@ -155,10 +155,10 @@ int main() {
 
                     if(map_x < 0 || map_x >= map->width || map_y < 0 || map_y >= map->height) break; // ray went out of map
                     if(map->data[map_y * map->height + map_x] != 0) {
-                        if(mm_values_size < mm_values_max) {
+                        /*if(mm_values_size < mm_values_max) {
                             mm_values[mm_values_size].x = map_x;
                             mm_values[mm_values_size++].y = map_y;
-                        }
+                        }*/
 
                         h_offset = absf(Ax - map_x * GRID_SIZE);
                         h_wall_distance = distance / GRID_SIZE;
@@ -189,10 +189,10 @@ int main() {
                     if(map_x < 0 || map_x >= map->width || map_y < 0 || map_y >= map->height) break; // ray went out of map
 
                     if(map->data[map_y * map->width + map_x] != 0) {
-                        if(mm_values_size < mm_values_max) {
+                        /*if(mm_values_size < mm_values_max) {
                             mm_values[mm_values_size].x = Ax;
                             mm_values[mm_values_size++].y = Ay;
-                        }
+                        }*/
 
                         v_offset = absf(Ay - map_y * GRID_SIZE);
                         v_wall_distance = distance / GRID_SIZE;
@@ -226,29 +226,11 @@ int main() {
         }
 
         // ==== DRAW MAP ====
-        const int mm_w = PROJECTION_WIDTH / 8, mm_h = PROJECTION_WIDTH / 8;
-        const int mm_x = PROJECTION_WIDTH - mm_w - 8, mm_y = 8;
-        const float mm_ratio = (float)mm_w / map->width;
-
-        for(int y = 0; y < map->height; ++y) {
-            for(int x = 0; x < map->width; ++x) {
-                int sx = mm_x + mm_ratio * x, sy = mm_y + mm_ratio * y;
-
-                int tile = map->data[y * map->width + x];
-                if(tile != 0) {
-                    FL_DrawRect(sx, sy, mm_ratio, mm_ratio, 0xFFFF00, true);
-                    FL_DrawRect(mm_x + mm_ratio * x, mm_y + mm_ratio * y, mm_ratio, mm_ratio, 0, false);
-                }
-            }
-        }
-
-        for(int i = 0; i < mm_values_size; ++i) {
+        minimap_draw(&minimap);
+        /*for(int i = 0; i < mm_values_size; ++i) {
             vec2f_t *v = &mm_values[i];
             FL_DrawCircle(mm_x + v->x * mm_ratio, mm_y + v->y * mm_ratio, 1, 0xffffff, true);
-        }
-
-        // player
-        FL_DrawCircle(mm_x + player.x / GRID_SIZE * mm_ratio, mm_y + player.y / GRID_SIZE * mm_ratio, 2, 0xFF0000, true);
+        }*/
 
         FL_DrawCircle(mouse.x, mouse.y, 2, 0x0000ff, true);
         FL_DrawLine(mouse.x, 0, mouse.x, PROJECTION_HEIGHT, 0x0000ff);
