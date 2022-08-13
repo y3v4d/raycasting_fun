@@ -5,6 +5,7 @@
 #include <time.h>
 #include <math.h>
 
+#include "debug.h"
 #include "map.h"
 #include "renderer.h"
 #include "tables.h"
@@ -18,38 +19,17 @@ typedef struct {
 } vec2f_t;
 
 typedef struct {
+    int x, y;
+} vec2i_t;
+
+typedef struct {
     float x, y;
     float angle, vangle;
 
     float move;
 } player_t;
 
-const float fov = 60.f;
-
-vec2f_t mouse = { 0 };
-char column_info[64] = "C: - D: -";
-
-uint32_t make_color(uint8_t r, uint8_t g, uint8_t b) {
-    return (uint32_t)(r << 16 | g << 8 | b);
-}
-
-#define MAX_STRING 512
-#define AVERAGE_COUNT 16
-
-double average_array(double *a, int p) {
-    double total = 0;
-    for(int i = 0; i < p; ++i) {
-        total += a[i];
-    }
-
-    return total / p;
-}
-
 int main() {
-    int averages_counter = 0;
-    double averages[FL_TIMER_ALL + 1][AVERAGE_COUNT];
-    char info_text[MAX_STRING];
-
     if(!FL_Initialize(640, 480))
         exit(-1);
 
@@ -79,6 +59,9 @@ int main() {
         exit(-1);
     }
 
+    const float fov = 60.f;
+    vec2f_t mouse = { 0 };
+
     player_t player = { .x = 5 * GRID_SIZE, .y = 5 * GRID_SIZE };
     vec2f_t direction = { 0 };
 
@@ -88,7 +71,9 @@ int main() {
         cos_table[i] = cos(arctorad(i));
     }
 
+    char column_info[64] = "C: - D: -";
     char player_pos_text[32];
+    char stats_text[512];
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
@@ -113,28 +98,11 @@ int main() {
             }
         }
 
-        const float dt = FL_GetDeltaTime();
-
-        averages[FL_TIMER_CLEAR_SCREEN][averages_counter] = FL_GetCoreTimer(FL_TIMER_CLEAR_SCREEN);
-        averages[FL_TIMER_RENDER][averages_counter] = FL_GetCoreTimer(FL_TIMER_RENDER);
-        averages[FL_TIMER_CLEAR_TO_RENDER][averages_counter] = FL_GetCoreTimer(FL_TIMER_CLEAR_TO_RENDER);
-        averages[FL_TIMER_ALL][averages_counter] = FL_GetCoreTimer(FL_TIMER_ALL);
-        ++averages_counter;
-
-        if(averages_counter >= AVERAGE_COUNT) averages_counter = 0;
-
-        snprintf(
-            info_text, MAX_STRING, 
-            "Clear: %f\nRender: %f\nClear to render: %f\nAll: %f\nDelta: %f\nFPS: %f",
-            average_array(averages[FL_TIMER_CLEAR_SCREEN], AVERAGE_COUNT),
-            average_array(averages[FL_TIMER_RENDER], AVERAGE_COUNT),
-            average_array(averages[FL_TIMER_CLEAR_TO_RENDER], AVERAGE_COUNT),
-            average_array(averages[FL_TIMER_ALL], AVERAGE_COUNT),
-            dt,
-            1000.0 / dt
-        );
+        debug_update_stats();
+        debug_print_stats(stats_text, 512);
 
         // movement
+        const float dt = FL_GetDeltaTime();
         player.angle += player.vangle * dt;
         if(player.angle < 0) player.angle += ANGLE_360;
         else if(player.angle >= ANGLE_360) player.angle -= ANGLE_360;
@@ -161,6 +129,11 @@ int main() {
         int current = (int)floor(player.angle) - ANGLE_30;
         if(current < 0) current += ANGLE_360;
 
+        vec2i_t player_grid_pos = {
+            .x = floor(player.x / GRID_SIZE) * GRID_SIZE,
+            .y = floor(player.y / GRID_SIZE) * GRID_SIZE
+        };
+
         for(int i = 0; i < PROJECTION_WIDTH; i++) {
             int v_map_x = -1, v_map_y = -1, h_map_x = -1, h_map_y = -1;
             float v_wall_distance = 999999.f, h_wall_distance = 999999.f;
@@ -172,7 +145,7 @@ int main() {
                 const float Xa = GRID_SIZE / tan_table[current];
                 const float Ya = is_down ? GRID_SIZE : -GRID_SIZE;
 
-                float Ay = (is_down ? floor(player.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE : floor(player.y / GRID_SIZE) * GRID_SIZE - 0.0001f);
+                float Ay = (is_down ? player_grid_pos.y + GRID_SIZE : player_grid_pos.y - 0.0001f);
                 float Ax = player.x + (player.y - Ay) / -tan_table[current];
 
                 for(int j = 0; j < r; ++j) {
@@ -206,7 +179,7 @@ int main() {
                 const float Xa = is_right ? GRID_SIZE : -GRID_SIZE;
                 const float Ya = tan_table[current] * GRID_SIZE;
 
-                float Ax = is_right ? floor(player.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE : floor(player.x / GRID_SIZE) * GRID_SIZE - 0.0001f;
+                float Ax = is_right ? player_grid_pos.x + GRID_SIZE : player_grid_pos.x - 0.0001f;
                 float Ay = player.y - (Ax - player.x) * -tan_table[current];
 
                 for(int j = 0; j < r; ++j) {
@@ -257,10 +230,6 @@ int main() {
         const int mm_x = PROJECTION_WIDTH - mm_w - 8, mm_y = 8;
         const float mm_ratio = (float)mm_w / map->width;
 
-        // background
-        //FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0x4444AA, true);
-        //FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0, false);
-
         for(int y = 0; y < map->height; ++y) {
             for(int x = 0; x < map->width; ++x) {
                 int sx = mm_x + mm_ratio * x, sy = mm_y + mm_ratio * y;
@@ -270,8 +239,6 @@ int main() {
                     FL_DrawRect(sx, sy, mm_ratio, mm_ratio, 0xFFFF00, true);
                     FL_DrawRect(mm_x + mm_ratio * x, mm_y + mm_ratio * y, mm_ratio, mm_ratio, 0, false);
                 }
-
-                //FL_DrawRect(mm_x + mm_ratio * x, mm_y + mm_ratio * y, mm_ratio, mm_ratio, 0, false);
             }
         }
 
@@ -286,7 +253,7 @@ int main() {
         FL_DrawCircle(mouse.x, mouse.y, 2, 0x0000ff, true);
         FL_DrawLine(mouse.x, 0, mouse.x, PROJECTION_HEIGHT, 0x0000ff);
         
-        FL_DrawTextBDF(8, 8, info_text, MAX_STRING, FL_GetWindowWidth() - 16, knxt);
+        FL_DrawTextBDF(8, 8, stats_text, 512, FL_GetWindowWidth() - 16, knxt);
         FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, player_pos_text, 32, 640, knxt);
         FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, column_info, 64, 640, knxt);
 
