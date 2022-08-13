@@ -61,6 +61,11 @@ int main() {
     player_t player = { .x = 5 * GRID_SIZE, .y = 5 * GRID_SIZE };
     vec2f_t direction = { 0 };
 
+    entity_t entity = {
+        .x = 10 * GRID_SIZE,
+        .y = 5 * GRID_SIZE
+    };
+
     char column_info[64] = "C: - D: -";
     char player_pos_text[32];
     char stats_text[512];
@@ -69,7 +74,8 @@ int main() {
         .w = PROJECTION_WIDTH / 8,
         .y = 8,
         .map = map,
-        .player = &player
+        .player = &player,
+        .entity = &entity
     };
 
     minimap.x = PROJECTION_WIDTH - minimap.w - 8;
@@ -134,6 +140,12 @@ int main() {
             .y = floor(player.y / GRID_SIZE) * GRID_SIZE
         };
 
+        vec2i_t entity_grid_pos = {
+            .x = floor(entity.x / GRID_SIZE) * GRID_SIZE,
+            .y = floor(entity.y / GRID_SIZE) * GRID_SIZE
+        };
+
+        // === DRAW WALLS ===
         for(int i = 0; i < PROJECTION_WIDTH; i++) {
             int v_map_x = -1, v_map_y = -1, h_map_x = -1, h_map_y = -1;
             float v_wall_distance = 999999.f, h_wall_distance = 999999.f;
@@ -161,7 +173,7 @@ int main() {
                         }*/
 
                         h_offset = absf(Ax - map_x * GRID_SIZE);
-                        h_wall_distance = distance / GRID_SIZE;
+                        h_wall_distance = distance;
                         h_map_x = map_x;
                         h_map_y = map_y;
 
@@ -195,7 +207,7 @@ int main() {
                         }*/
 
                         v_offset = absf(Ay - map_y * GRID_SIZE);
-                        v_wall_distance = distance / GRID_SIZE;
+                        v_wall_distance = distance;
                         v_map_x = map_x;
                         v_map_y = map_y;
 
@@ -207,13 +219,13 @@ int main() {
                 }
             }
 
-            if(absf(h_wall_distance) < absf(v_wall_distance) && absf(h_wall_distance) < r) {
+            if(absf(h_wall_distance) < absf(v_wall_distance) && absf(h_wall_distance) < r * GRID_SIZE) {
                 //draw_column(i, h_wall_distance, h_map_x, h_map_y);
                 r_draw_column_textured(i, h_offset, h_wall_distance, wall0);
                 if(i == mouse.x) {
                     snprintf(column_info, 64, "C: %d D: %f Offset: %d", i, h_wall_distance, h_offset);
                 }
-            } else if(absf(v_wall_distance) < absf(h_wall_distance) && absf(v_wall_distance) < r) {
+            } else if(absf(v_wall_distance) < absf(h_wall_distance) && absf(v_wall_distance) < r * GRID_SIZE) {
                 //draw_column(i, v_wall_distance, v_map_x, v_map_y);
                 r_draw_column_textured(i, v_offset, v_wall_distance, wall0);
                 if(i == mouse.x) {
@@ -223,6 +235,21 @@ int main() {
 
             current += 1;
             if(current >= ANGLE_360) current -= ANGLE_360;
+        }
+
+        // === DRAW ENTITIES ===
+        {
+            vec2f_t rel_pos = {
+                .x = entity.x - player.x,
+                .y = entity.y - player.y
+            };
+
+            printf("Position relative entity: %f %f\n", rel_pos.x, rel_pos.y);
+
+            float dist = sqrtf(rel_pos.x * rel_pos.x + rel_pos.y * rel_pos.y);
+            printf("Distance entity: %f\n", dist);
+
+            //r_draw_column((float)PROJECTION_WIDTH / 2 + rel_pos.y, dist / GRID_SIZE, 0xffff00);
         }
 
         // ==== DRAW MAP ====

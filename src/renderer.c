@@ -2,6 +2,7 @@
 #include "tables.h"
 
 #include <math.h>
+#include <stdio.h>
 
 inline __attribute__((always_inline)) 
 float absf(float n) {
@@ -15,9 +16,7 @@ float apply_fish(int column, float distance) {
 }
 
 void r_draw_column(int column, float distance, uint32_t color) {
-    const uint32_t shade = (distance == 0 ? 1 : min(255.f / absf(distance) * 2, 255));
-
-    const float fish = (float)column / PROJECTION_WIDTH * ANGLE_60 - ANGLE_30;
+    //const uint32_t shade = (distance == 0 ? 1 : min(255.f / absf(distance) * 2, 255));
     const float cdistance = absf(apply_fish(column, distance));
     const float half_height = (float)PROJECTION_HEIGHT / cdistance / 2;
 
@@ -25,15 +24,18 @@ void r_draw_column(int column, float distance, uint32_t color) {
 }
 
 void r_draw_column_textured(int column, int offset, float distance, FL_Texture *texture) {
+    const float proj_distance = (float)PROJECTION_WIDTH / 2 / tan_table[ANGLE_30];
+    //printf("proj_distance: %f\n", proj_distance);
+
     const float cdistance = absf(apply_fish(column, distance));
-    const float height = (float)PROJECTION_HEIGHT / cdistance;
+    const float height = (float)GRID_SIZE / cdistance * proj_distance;
 
     if(height < PROJECTION_HEIGHT) {
         const float half_height = height / 2;
 
         const float tex_step = GRID_SIZE / height;
         float tex_current = 0;
-        float brightness = 1.f / absf(cdistance);
+        float brightness = (float)GRID_SIZE / absf(cdistance);
 
         uint32_t *p = texture->data + offset;
         for(int i = floor((PROJECTION_HEIGHT >> 1) - half_height); i < floor((PROJECTION_HEIGHT >> 1) + half_height); ++i) {

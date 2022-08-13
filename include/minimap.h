@@ -3,6 +3,7 @@
 
 #include "map.h"
 #include "player.h"
+#include "entity.h"
 
 typedef struct {
     int x, y;
@@ -10,6 +11,7 @@ typedef struct {
 
     const map_t *map;
     const player_t *player;
+    const entity_t *entity;
 } minimap_t;
 
 void minimap_draw(const minimap_t *m);

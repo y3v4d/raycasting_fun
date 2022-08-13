@@ -19,4 +19,5 @@ void minimap_draw(const minimap_t *m) {
     }
 
     FL_DrawCircle(m->x + m->player->x / GRID_SIZE * ratio, m->y + m->player->y / GRID_SIZE * ratio, 2, 0xFF0000, true);
+    FL_DrawCircle(m->x + m->entity->x / GRID_SIZE * ratio, m->y + m->entity->y / GRID_SIZE * ratio, 2, 0xFFFF00, true);
 }
