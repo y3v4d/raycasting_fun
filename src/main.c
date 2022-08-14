@@ -7,6 +7,7 @@
 
 #include "map.h"
 #include "debug.h"
+#include "entity.h"
 
 #define PI 3.1415926535
 
@@ -38,10 +39,15 @@ typedef struct {
     float angle;
 } player_t;
 
-void draw_column_textured(int column, int offset, float distance, FL_Texture *texture) {
+void draw_column(int column, float distance, uint32_t color) {
     //const float proj_distance = (float)PROJECTION_WIDTH / 2 / tan_table[ANGLE_30];
-    //printf("proj_distance: %f\n", proj_distance);
+    //const uint32_t shade = (distance == 0 ? 1 : min(255.f / absf(distance) * 2, 255));
+    const float half_height = (float)FL_GetWindowHeight() / distance / 2;//(float)GRID_SIZE / cdistance * proj_distance / 2;
 
+    FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) - half_height, column, (PROJECTION_HEIGHT >> 1) + half_height, color);
+}
+
+void draw_column_textured(int column, int offset, float distance, FL_Texture *texture) {
     const float height = (float)FL_GetWindowHeight() / distance;
 
     if(height < PROJECTION_HEIGHT) {
@@ -112,21 +118,26 @@ int main() {
     vec2f_t mouse = { 0 };
 
     player_t player = { 
-        .x = 1.5, 
-        .y = 1.5,
-        .dx = 0,
-        .dy = -1,
+        .x = 10, 
+        .y = 5,
+        .dx = 1,
+        .dy = 0,
         .move = 0,
         .strafe = 0,
         .turn = 0
+    };
+
+    entity_t entity = {
+        .x = 11,
+        .y = 5
     };
 
     char column_info[64] = "C: - D: -";
     char player_info_text[128] = "";
     char stats_text[512];
 
-    float plane_x = 0.57;
-    float plane_y = 0;
+    float plane_x = 0;
+    float plane_y = 0.66;
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
@@ -193,6 +204,10 @@ int main() {
             
             float cam_x = (float)i * 2 / PROJECTION_WIDTH - 1;
 
+            if(i == 0 || i == 320 || i == PROJECTION_WIDTH - 1) {
+                //printf("CamX[%d] %f\n", i, cam_x);
+            }
+
             float r_dir_x = player.dx + plane_x * cam_x;
             float r_dir_y = player.dy + plane_y * cam_x;
 
@@ -235,10 +250,10 @@ int main() {
 
                 if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) continue;
                 if(map->data[my * map->width + mx] != 0) {
-                    mm_points[mm_points_count].x = player.x + r_dir_x * 0.5;
+                    /*mm_points[mm_points_count].x = player.x + r_dir_x * 0.5;
                     mm_points[mm_points_count].y = player.y + r_dir_y * 0.5;
 
-                    mm_points_count++;
+                    mm_points_count++;*/
                     hit = map->data[my * map->width + mx];
                     break;
                 }
@@ -265,16 +280,31 @@ int main() {
                 float lineHeight = FL_GetWindowHeight() / distance;
 
                 draw_column_textured(i, offset, distance, wall0);
-
-                /*FL_DrawLine(
-                    i, 
-                    (PROJECTION_HEIGHT >> 1) - lineHeight / 2, 
-                    i, 
-                    (PROJECTION_HEIGHT >> 1) + lineHeight / 2, 
-                    hit == 1 ? 0xffff00 : 0xff00ff);*/
             }
-            //float x_side_delta = 0;
-            //float y_side_delta = 0;
+        }
+
+         // === DRAW ENTITIES ===
+        {
+            vec2f_t Z = {
+                .x = entity.x - player.x,
+                .y = entity.y - player.y
+            };
+
+            const float w = 1.f / -(plane_x * player.dy - plane_y * player.dx);
+
+            float rx = w * (Z.x * player.dy - Z.y * player.dx);
+            float t = w * (Z.x * plane_y - Z.y * plane_x);
+
+            printf("T: %f W: %f Rx = %f\n", t, w, rx);
+
+            float x = (PROJECTION_WIDTH >> 1) * rx / t;
+
+            float half_screen = PROJECTION_HEIGHT >> 1;
+            float height = (float)PROJECTION_HEIGHT / t;
+
+            if(t > 0) {
+                FL_DrawLine((PROJECTION_WIDTH >> 1) - x, half_screen - height / 2, (PROJECTION_WIDTH >> 1) - x, half_screen + height / 2, 0xffff00);
+            }
         }
 
         // === DRAW MINIMAP ===
@@ -283,7 +313,7 @@ int main() {
         const int mm_y = 8;
         const float mm_grid = mm_w / map->width;
 
-        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0x444444, true);
+        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0xffffff, true);
 
         for(int y = 0; y < map->width; ++y) {
             for(int x = 0; x < map->height; ++x) {
@@ -296,7 +326,7 @@ int main() {
                         true
                     );
                 }
-                FL_DrawRect(mm_x + x * mm_grid, mm_y + y * mm_grid, mm_grid, mm_grid, 0, false);
+                //FL_DrawRect(mm_x + x * mm_grid, mm_y + y * mm_grid, mm_grid, mm_grid, 0, false);
             }
         }
 
@@ -304,7 +334,8 @@ int main() {
             FL_DrawCircle(mm_x + mm_points[i].x * mm_grid, mm_y + mm_points[i].y * mm_grid, 1, 0x0000ff, true);
         }
 
-        FL_DrawCircle(mm_x + player.x * mm_grid, mm_y + player.y * mm_grid, 2, 0xff0000, true);
+        FL_DrawCircle(mm_x + player.x * mm_grid, mm_y + player.y * mm_grid, 3, 0xff0000, true);
+        FL_DrawCircle(mm_x + entity.x * mm_grid, mm_y + entity.y * mm_grid, 3, 0x0000ff, true);
         FL_DrawLine(
             mm_x + player.x * mm_grid,
             mm_y + player.y * mm_grid,
