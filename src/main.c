@@ -16,6 +16,8 @@
 #define PROJECTION_WIDTH 640
 #define PROJECTION_HEIGHT 480
 
+float z_buffer[PROJECTION_WIDTH] = { 0 };
+
 float absf(float x) {
     return x < 0 ? -x : x;
 }
@@ -277,9 +279,16 @@ int main() {
             }
 
             if(hit) {
+                z_buffer[i] = distance;
                 float lineHeight = FL_GetWindowHeight() / distance;
 
                 draw_column_textured(i, offset, distance, wall0);
+            } else {
+                z_buffer[i] = 1e30;
+            }
+
+            if(mouse.x == i) {
+                snprintf(column_info, 64, "C: %d Z: %f", i, z_buffer[i]);
             }
         }
 
@@ -295,15 +304,26 @@ int main() {
             float rx = w * (Z.x * player.dy - Z.y * player.dx);
             float t = w * (Z.x * plane_y - Z.y * plane_x);
 
-            printf("T: %f W: %f Rx = %f\n", t, w, rx);
+            //printf("T: %f W: %f Rx: %f\n", t, w, rx);
 
             float x = (PROJECTION_WIDTH >> 1) * rx / t;
 
             float half_screen = PROJECTION_HEIGHT >> 1;
-            float height = (float)PROJECTION_HEIGHT / t;
+            float size = (float)PROJECTION_HEIGHT / t;
+
+            //printf("Size: %f\n", size);
 
             if(t > 0) {
-                FL_DrawLine((PROJECTION_WIDTH >> 1) - x, half_screen - height / 2, (PROJECTION_WIDTH >> 1) - x, half_screen + height / 2, 0xffff00);
+                for(int i = floorf(x - size / 2); i < floorf(x + size / 2); ++i) {
+                    int col = (PROJECTION_WIDTH >> 1) - i;
+                    if(col < 0 || col >= PROJECTION_WIDTH) continue;
+                    if(mouse.x == col) {
+                        printf("Col[%d] T: %f\n", col, t);
+                    }
+                    if(t < z_buffer[col]) {
+                        FL_DrawLine((PROJECTION_WIDTH >> 1) - i, half_screen - size / 2, (PROJECTION_WIDTH >> 1) - i, half_screen + size / 2, 0xffff00);
+                    }
+                }
             }
         }
 
@@ -319,10 +339,10 @@ int main() {
             for(int x = 0; x < map->height; ++x) {
                 if(map->data[y * map->width + x] != 0) {
                     FL_DrawRect(
-                        mm_x + x * mm_grid, 
-                        mm_y + y * mm_grid, 
-                        mm_grid, mm_grid, 
-                        map->data[y * map->width + x] == 1 ? 0xffff00 : 0xff00ff, 
+                        mm_x + x * mm_grid,
+                        mm_y + y * mm_grid,
+                        mm_grid, mm_grid,
+                        map->data[y * map->width + x] == 1 ? 0xffff00 : 0xff00ff,
                         true
                     );
                 }
@@ -344,9 +364,11 @@ int main() {
             0xff0000 
         );
 
+        FL_DrawLine(mouse.x, 0, mouse.x, FL_GetWindowHeight() - 1, 0x0000ff);
+
         FL_DrawTextBDF(8, 8, stats_text, 512, FL_GetWindowWidth() - 16, knxt);
         FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, player_info_text, 128, 640, knxt);
-        //FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, column_info, 64, 640, knxt);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, column_info, 64, 640, knxt);
 
         FL_Render();
     }
