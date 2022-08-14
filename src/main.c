@@ -42,9 +42,7 @@ typedef struct {
 } player_t;
 
 void draw_column(int column, float distance, uint32_t color) {
-    //const float proj_distance = (float)PROJECTION_WIDTH / 2 / tan_table[ANGLE_30];
-    //const uint32_t shade = (distance == 0 ? 1 : min(255.f / absf(distance) * 2, 255));
-    const float half_height = (float)FL_GetWindowHeight() / distance / 2;//(float)GRID_SIZE / cdistance * proj_distance / 2;
+    const float half_height = (float)FL_GetWindowHeight() / distance / 2;
 
     FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) - half_height, column, (PROJECTION_HEIGHT >> 1) + half_height, color);
 }
@@ -62,13 +60,7 @@ void draw_column_textured(int column, int offset, float distance, FL_Texture *te
         uint32_t *p = texture->data + offset;
         for(int i = floor((PROJECTION_HEIGHT >> 1) - half_height); i < floor((PROJECTION_HEIGHT >> 1) + half_height); ++i) {
             uint32_t color = *(p + (int)(floor(tex_current)) * texture->width);
-            uint8_t r = color >> 16, g = color >> 8, b = color;
-
-            r *= brightness;
-            g *= brightness;
-            b *= brightness;
-
-            FL_DrawPoint(column, i, (uint32_t)(r << 16 | g << 8 | b));
+            FL_DrawPoint(column, i, color);
 
             tex_current += tex_step;
         }
@@ -131,7 +123,7 @@ int main() {
 
     entity_t entity = {
         .x = 11,
-        .y = 5
+        .y = 6
     };
 
     char column_info[64] = "C: - D: -";
@@ -206,10 +198,6 @@ int main() {
             
             float cam_x = (float)i * 2 / PROJECTION_WIDTH - 1;
 
-            if(i == 0 || i == 320 || i == PROJECTION_WIDTH - 1) {
-                //printf("CamX[%d] %f\n", i, cam_x);
-            }
-
             float r_dir_x = player.dx + plane_x * cam_x;
             float r_dir_y = player.dy + plane_y * cam_x;
 
@@ -252,10 +240,6 @@ int main() {
 
                 if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) continue;
                 if(map->data[my * map->width + mx] != 0) {
-                    /*mm_points[mm_points_count].x = player.x + r_dir_x * 0.5;
-                    mm_points[mm_points_count].y = player.y + r_dir_y * 0.5;
-
-                    mm_points_count++;*/
                     hit = map->data[my * map->width + mx];
                     break;
                 }
@@ -270,19 +254,17 @@ int main() {
                 offset = player.x + distance * r_dir_x;
                 offset -= floorf(offset);
                 offset *= GRID_SIZE;
-                //if(i == 320) printf("Offset: %f\n", offset);
             } else {
                 offset = player.y + distance * r_dir_y;
                 offset -= floorf(offset);
                 offset *= GRID_SIZE;
-                //if(i == 320) printf("Offset: %f\n", offset);
             }
 
             if(hit) {
-                z_buffer[i] = distance;
                 float lineHeight = FL_GetWindowHeight() / distance;
 
                 draw_column_textured(i, offset, distance, wall0);
+                z_buffer[i] = distance;
             } else {
                 z_buffer[i] = 1e30;
             }
@@ -304,22 +286,16 @@ int main() {
             float rx = w * (Z.x * player.dy - Z.y * player.dx);
             float t = w * (Z.x * plane_y - Z.y * plane_x);
 
-            //printf("T: %f W: %f Rx: %f\n", t, w, rx);
-
             float x = (PROJECTION_WIDTH >> 1) * rx / t;
 
             float half_screen = PROJECTION_HEIGHT >> 1;
             float size = (float)PROJECTION_HEIGHT / t;
 
-            //printf("Size: %f\n", size);
-
             if(t > 0) {
                 for(int i = floorf(x - size / 2); i < floorf(x + size / 2); ++i) {
                     int col = (PROJECTION_WIDTH >> 1) - i;
                     if(col < 0 || col >= PROJECTION_WIDTH) continue;
-                    if(mouse.x == col) {
-                        printf("Col[%d] T: %f\n", col, t);
-                    }
+
                     if(t < z_buffer[col]) {
                         FL_DrawLine((PROJECTION_WIDTH >> 1) - i, half_screen - size / 2, (PROJECTION_WIDTH >> 1) - i, half_screen + size / 2, 0xffff00);
                     }
