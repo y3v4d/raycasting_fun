@@ -89,8 +89,8 @@ int main() {
         while(FL_GetEvent(&event)) {
             if(event.type == FL_EVENT_KEY_PRESSED) {
                 switch(event.key.code) {
-                    case FL_KEY_w: player.move = 0.001f; break;
-                    case FL_KEY_s: player.move = -0.001f; break;
+                    case FL_KEY_w: player.move = 0.002f; break;
+                    case FL_KEY_s: player.move = -0.002f; break;
                     case FL_KEY_d: player.turn = 0.05f; break;
                     case FL_KEY_a: player.turn = -0.05f; break;
                     case FL_KEY_SPACE: player.strafe = 1; break;
