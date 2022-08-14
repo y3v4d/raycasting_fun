@@ -5,7 +5,7 @@
 #include <time.h>
 #include <math.h>
 
-#include "core/fl_key.h"
+#include "map.h"
 #include "debug.h"
 
 #define PI 3.1415926535
@@ -38,6 +38,50 @@ typedef struct {
     float angle;
 } player_t;
 
+void draw_column_textured(int column, int offset, float distance, FL_Texture *texture) {
+    //const float proj_distance = (float)PROJECTION_WIDTH / 2 / tan_table[ANGLE_30];
+    //printf("proj_distance: %f\n", proj_distance);
+
+    const float height = (float)FL_GetWindowHeight() / distance;
+
+    if(height < PROJECTION_HEIGHT) {
+        const float half_height = height / 2;
+
+        const float tex_step = GRID_SIZE / height;
+        float tex_current = 0;
+        float brightness = 1.f / absf(distance);
+
+        uint32_t *p = texture->data + offset;
+        for(int i = floor((PROJECTION_HEIGHT >> 1) - half_height); i < floor((PROJECTION_HEIGHT >> 1) + half_height); ++i) {
+            uint32_t color = *(p + (int)(floor(tex_current)) * texture->width);
+            uint8_t r = color >> 16, g = color >> 8, b = color;
+
+            r *= brightness;
+            g *= brightness;
+            b *= brightness;
+
+            FL_DrawPoint(column, i, (uint32_t)(r << 16 | g << 8 | b));
+
+            tex_current += tex_step;
+        }
+
+        FL_DrawLine(column, 0, column, (PROJECTION_HEIGHT >> 1) - half_height - 1, 0x666666);
+        FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) + half_height, column, PROJECTION_HEIGHT - 1, 0x888888);
+    } else {
+        const float tex_step = GRID_SIZE / height;
+        
+        float diff = height - PROJECTION_HEIGHT;
+        float tex_current = diff / 2 * tex_step;
+
+        uint32_t *p = texture->data + offset;
+        for(int i = 0; i < PROJECTION_HEIGHT; ++i) {
+            FL_DrawPoint(column, i, *(p + (int)(floor(tex_current) * texture->width)));
+
+            tex_current += tex_step;
+        }
+    }
+}
+
 int main() {
     if(!FL_Initialize(640, 480))
         exit(-1);
@@ -52,14 +96,20 @@ int main() {
         exit(-1);
     }
 
-    vec2f_t mouse = { 0 };
+    FL_Texture *wall0 = FL_LoadTexture("data/wall0.bmp");
+    if(!wall0) {
+        FL_Close();
+        exit(-1);
+    }
 
-    uint8_t map[16] = {
-        1, 2, 1, 2,
-        2, 0, 0, 1,
-        1, 0, 0, 2,
-        2, 1, 2, 1
-    };
+    map_t *map = map_load("data/map0.data");
+    if(!map) {
+        fprintf(stderr, "Error loading map!\n");
+        FL_Close();
+        exit(-1);
+    }
+
+    vec2f_t mouse = { 0 };
 
     player_t player = { 
         .x = 1.5, 
@@ -172,7 +222,7 @@ int main() {
 
             int side = 0; // 0 - horizontal 1 - vertical
             int hit = 0;
-            for(int i = 0; i < 20; ++i) {
+            for(int i = 0; i < 50; ++i) {
                 if(curr_dist_x < curr_dist_y) {
                     mx += map_step_x;
                     curr_dist_x += d_dist_x;
@@ -183,13 +233,13 @@ int main() {
                     side = 0;
                 }
 
-                if(my < 0 || my >= 4 || mx < 0 || mx >= 4) continue;
-                if(map[my * 4 + mx] != 0) {
+                if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) continue;
+                if(map->data[my * map->width + mx] != 0) {
                     mm_points[mm_points_count].x = player.x + r_dir_x * 0.5;
                     mm_points[mm_points_count].y = player.y + r_dir_y * 0.5;
 
                     mm_points_count++;
-                    hit = map[my * 4 + mx];
+                    hit = map->data[my * map->width + mx];
                     break;
                 }
             }
@@ -198,15 +248,30 @@ int main() {
             if(side == 0) distance = curr_dist_y - d_dist_y;
             else distance = curr_dist_x - d_dist_x;
 
+            float offset = 0;
+            if(side == 0) {
+                offset = player.x + distance * r_dir_x;
+                offset -= floorf(offset);
+                offset *= GRID_SIZE;
+                //if(i == 320) printf("Offset: %f\n", offset);
+            } else {
+                offset = player.y + distance * r_dir_y;
+                offset -= floorf(offset);
+                offset *= GRID_SIZE;
+                //if(i == 320) printf("Offset: %f\n", offset);
+            }
+
             if(hit) {
                 float lineHeight = FL_GetWindowHeight() / distance;
 
-                FL_DrawLine(
+                draw_column_textured(i, offset, distance, wall0);
+
+                /*FL_DrawLine(
                     i, 
                     (PROJECTION_HEIGHT >> 1) - lineHeight / 2, 
                     i, 
                     (PROJECTION_HEIGHT >> 1) + lineHeight / 2, 
-                    hit == 1 ? 0xffff00 : 0xff00ff);
+                    hit == 1 ? 0xffff00 : 0xff00ff);*/
             }
             //float x_side_delta = 0;
             //float y_side_delta = 0;
@@ -216,18 +281,18 @@ int main() {
         const float mm_w = 128, mm_h = 128;
         const int mm_x = FL_GetWindowWidth() - mm_w - 8;
         const int mm_y = 8;
-        const float mm_grid = mm_w / 4;
+        const float mm_grid = mm_w / map->width;
 
         FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0x444444, true);
 
-        for(int y = 0; y < 4; ++y) {
-            for(int x = 0; x < 4; ++x) {
-                if(map[y * 4 + x] != 0) {
+        for(int y = 0; y < map->width; ++y) {
+            for(int x = 0; x < map->height; ++x) {
+                if(map->data[y * map->width + x] != 0) {
                     FL_DrawRect(
                         mm_x + x * mm_grid, 
                         mm_y + y * mm_grid, 
                         mm_grid, mm_grid, 
-                        map[y * 4 + x] == 1 ? 0xffff00 : 0xff00ff, 
+                        map->data[y * map->width + x] == 1 ? 0xffff00 : 0xff00ff, 
                         true
                     );
                 }
@@ -254,6 +319,9 @@ int main() {
 
         FL_Render();
     }
+
+    map_close(map);
+    FL_FreeTexture(wall0);
 
     FL_FreeFontBDF(knxt);
     FL_Close();
