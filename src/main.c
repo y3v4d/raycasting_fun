@@ -35,6 +35,12 @@ int main() {
         exit(-1);
     }
 
+    FL_Texture *floor = FL_LoadTexture("data/floor0.bmp");
+    if(!floor) {
+        FL_Close();
+        exit(-1);
+    }
+
     map_t *map = map_load("data/map0.data");
     if(!map) {
         fprintf(stderr, "Error loading map!\n");
@@ -42,11 +48,9 @@ int main() {
         exit(-1);
     }
 
-    vec2f_t mouse = { 0 };
-
     player_t player = { 
         .x = 10, 
-        .y = 5,
+        .y = 6,
         .dx = 1,
         .dy = 0,
         .move = 0,
@@ -78,6 +82,8 @@ int main() {
     float plane_x = 0;
     float plane_y = 0.66;
 
+    vec2f_t mouse = { 0 };
+
     FL_Event event;
     while(!FL_WindowShouldClose()) {
         while(FL_GetEvent(&event)) {
@@ -105,6 +111,7 @@ int main() {
 
         // movement
         const float dt = FL_GetDeltaTime();
+
         const float oldDx = player.dx;
         player.dx = player.dx * cos(player.turn) - player.dy * sin(player.turn); 
         player.dy = player.dy * cos(player.turn) + oldDx * sin(player.turn);
@@ -112,6 +119,7 @@ int main() {
         const float oldPlaneX = plane_x;
         plane_x = plane_x * cos(player.turn) - plane_y * sin(player.turn);
         plane_y = plane_y * cos(player.turn) + oldPlaneX * sin(player.turn);
+
         if(player.strafe) {
             player.x += player.move * -player.dy * dt;
             player.y += player.move * player.dx * dt;
@@ -136,6 +144,42 @@ int main() {
         const int mm_points_max = 1024;
         vec2f_t mm_points[mm_points_max];
         int mm_points_count = 0;
+
+        // === DRAW FLOOR ===
+        for(int i = PROJECTION_HEIGHT >> 1; i < PROJECTION_HEIGHT; ++i) {
+            int p = (PROJECTION_HEIGHT >> 1) - i;
+
+            float ray_dir0_x = player.dx - plane_x;
+            float ray_dir0_y = player.dy - plane_y;
+            float ray_dir1_x = player.dx + plane_x;
+            float ray_dir1_y = player.dy + plane_y;
+
+            const float player_z = PROJECTION_HEIGHT >> 1;
+
+            float r = -player_z / p;
+
+            float floorStepX = r * (ray_dir1_x - ray_dir0_x) / PROJECTION_WIDTH;
+            float floorStepY = r * (ray_dir1_y - ray_dir0_y) / PROJECTION_WIDTH;
+
+            float floorX = player.x + ray_dir0_x * r;
+            float floorY = player.y + ray_dir0_y * r;
+
+            if(mouse.y == i) {
+                snprintf(column_info, 64, "S: %d P: %d R: %f Floor (%.2f %.2f)\n", i, p, r, floorX, floorY);
+            }
+
+            for(int x = 0; x < PROJECTION_WIDTH; ++x) {
+                int mx = floorf(floorX), my = floorf(floorY);
+
+                int tx = (int)(floor->width * (floorX - mx)) & (floor->width - 1);
+                int ty = (int)(floor->height * (floorY - my)) & (floor->height - 1);
+
+                floorX += floorStepX;
+                floorY += floorStepY;
+
+                FL_DrawPoint(x, i, floor->data[ty * floor->width + tx]);
+            }
+        }
 
         // === DRAW WALLS ===
         for(int i = 0; i < PROJECTION_WIDTH; ++i) {
@@ -215,7 +259,7 @@ int main() {
             }
 
             if(mouse.x == i) {
-                snprintf(column_info, 64, "C: %d Z: %f", i, z_buffer[i]);
+                //snprintf(column_info, 64, "C: %d Z: %f", i, z_buffer[i]);
             }
         }
 
@@ -242,7 +286,7 @@ int main() {
                     if(col < 0 || col >= PROJECTION_WIDTH) continue;
 
                     if(t < z_buffer[col]) {
-                        FL_DrawLine((PROJECTION_WIDTH >> 1) - i, half_screen - size / 2, (PROJECTION_WIDTH >> 1) - i, half_screen + size / 2, 0xffff00);
+                        //FL_DrawLine((PROJECTION_WIDTH >> 1) - i, half_screen - size / 2, (PROJECTION_WIDTH >> 1) - i, half_screen + size / 2, 0xffff00);
                     }
                 }
             }
@@ -260,6 +304,7 @@ int main() {
     }
 
     map_close(map);
+    FL_FreeTexture(floor);
     FL_FreeTexture(wall0);
 
     FL_FreeFontBDF(font);

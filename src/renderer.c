@@ -28,8 +28,8 @@ void r_draw_column_textured(int column, int offset, float distance, FL_Texture *
             tex_current += tex_step;
         }
 
-        FL_DrawLine(column, 0, column, (PROJECTION_HEIGHT >> 1) - half_height - 1, 0x666666);
-        FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) + half_height, column, PROJECTION_HEIGHT - 1, 0x888888);
+        //FL_DrawLine(column, 0, column, (PROJECTION_HEIGHT >> 1) - half_height - 1, 0x666666);
+        //FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) + half_height, column, PROJECTION_HEIGHT - 1, 0x888888);
     } else {
         const float tex_step = GRID_SIZE / height;
         
