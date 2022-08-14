@@ -8,90 +8,23 @@
 #include "map.h"
 #include "debug.h"
 #include "entity.h"
-
-#define PI 3.1415926535
-
-#define FOV 60
-#define GRID_SIZE 32
-#define PROJECTION_WIDTH 640
-#define PROJECTION_HEIGHT 480
+#include "minimap.h"
+#include "renderer.h"
+#include "player.h"
+#include "vector.h"
 
 float z_buffer[PROJECTION_WIDTH] = { 0 };
 
-float absf(float x) {
-    return x < 0 ? -x : x;
-}
-
-typedef struct {
-    float x, y;
-} vec2f_t;
-
-typedef struct {
-    int x, y;
-} vec2i_t;
-
-typedef struct {
-    float x, y;
-    float dx, dy;
-
-    float move;
-    int strafe;
-    float turn;
-
-    float angle;
-} player_t;
-
-void draw_column(int column, float distance, uint32_t color) {
-    const float half_height = (float)FL_GetWindowHeight() / distance / 2;
-
-    FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) - half_height, column, (PROJECTION_HEIGHT >> 1) + half_height, color);
-}
-
-void draw_column_textured(int column, int offset, float distance, FL_Texture *texture) {
-    const float height = (float)FL_GetWindowHeight() / distance;
-
-    if(height < PROJECTION_HEIGHT) {
-        const float half_height = height / 2;
-
-        const float tex_step = GRID_SIZE / height;
-        float tex_current = 0;
-        float brightness = 1.f / absf(distance);
-
-        uint32_t *p = texture->data + offset;
-        for(int i = floor((PROJECTION_HEIGHT >> 1) - half_height); i < floor((PROJECTION_HEIGHT >> 1) + half_height); ++i) {
-            uint32_t color = *(p + (int)(floor(tex_current)) * texture->width);
-            FL_DrawPoint(column, i, color);
-
-            tex_current += tex_step;
-        }
-
-        FL_DrawLine(column, 0, column, (PROJECTION_HEIGHT >> 1) - half_height - 1, 0x666666);
-        FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) + half_height, column, PROJECTION_HEIGHT - 1, 0x888888);
-    } else {
-        const float tex_step = GRID_SIZE / height;
-        
-        float diff = height - PROJECTION_HEIGHT;
-        float tex_current = diff / 2 * tex_step;
-
-        uint32_t *p = texture->data + offset;
-        for(int i = 0; i < PROJECTION_HEIGHT; ++i) {
-            FL_DrawPoint(column, i, *(p + (int)(floor(tex_current) * texture->width)));
-
-            tex_current += tex_step;
-        }
-    }
-}
-
 int main() {
-    if(!FL_Initialize(640, 480))
+    if(!FL_Initialize(PROJECTION_WIDTH, PROJECTION_HEIGHT))
         exit(-1);
 
     FL_SetTitle("Raycasting Test");
     FL_SetFrameTime(16.6);
     FL_SetTextColor(0);
 
-    FL_FontBDF *knxt = FL_LoadFontBDF("data/fonts/knxt.bdf");
-    if(!knxt) {
+    FL_FontBDF *font = FL_LoadFontBDF("data/fonts/knxt.bdf");
+    if(!font) {
         FL_Close();
         exit(-1);
     }
@@ -125,6 +58,18 @@ int main() {
         .x = 11,
         .y = 6
     };
+
+    minimap_t minimap = {
+        .w = 128,
+        .h = 128,
+        .y = 8,
+
+        .map = map,
+        .player = &player,
+        .entity = NULL,
+        .points_count = 0
+    };
+    minimap.x = PROJECTION_WIDTH - minimap.w - 8;
 
     char column_info[64] = "C: - D: -";
     char player_info_text[128] = "";
@@ -263,7 +208,7 @@ int main() {
             if(hit) {
                 float lineHeight = FL_GetWindowHeight() / distance;
 
-                draw_column_textured(i, offset, distance, wall0);
+                r_draw_column_textured(i, offset, distance, wall0);
                 z_buffer[i] = distance;
             } else {
                 z_buffer[i] = 1e30;
@@ -303,48 +248,13 @@ int main() {
             }
         }
 
-        // === DRAW MINIMAP ===
-        const float mm_w = 128, mm_h = 128;
-        const int mm_x = FL_GetWindowWidth() - mm_w - 8;
-        const int mm_y = 8;
-        const float mm_grid = mm_w / map->width;
-
-        FL_DrawRect(mm_x, mm_y, mm_w, mm_h, 0xffffff, true);
-
-        for(int y = 0; y < map->width; ++y) {
-            for(int x = 0; x < map->height; ++x) {
-                if(map->data[y * map->width + x] != 0) {
-                    FL_DrawRect(
-                        mm_x + x * mm_grid,
-                        mm_y + y * mm_grid,
-                        mm_grid, mm_grid,
-                        map->data[y * map->width + x] == 1 ? 0xffff00 : 0xff00ff,
-                        true
-                    );
-                }
-                //FL_DrawRect(mm_x + x * mm_grid, mm_y + y * mm_grid, mm_grid, mm_grid, 0, false);
-            }
-        }
-
-        for(int i = 0; i < mm_points_count; ++i) {
-            FL_DrawCircle(mm_x + mm_points[i].x * mm_grid, mm_y + mm_points[i].y * mm_grid, 1, 0x0000ff, true);
-        }
-
-        FL_DrawCircle(mm_x + player.x * mm_grid, mm_y + player.y * mm_grid, 3, 0xff0000, true);
-        FL_DrawCircle(mm_x + entity.x * mm_grid, mm_y + entity.y * mm_grid, 3, 0x0000ff, true);
-        FL_DrawLine(
-            mm_x + player.x * mm_grid,
-            mm_y + player.y * mm_grid,
-            mm_x + (player.x + 2 * player.dx) * mm_grid,
-            mm_y + (player.y + 2 * player.dy) * mm_grid,
-            0xff0000 
-        );
-
+        minimap_draw(&minimap);
         FL_DrawLine(mouse.x, 0, mouse.x, FL_GetWindowHeight() - 1, 0x0000ff);
 
-        FL_DrawTextBDF(8, 8, stats_text, 512, FL_GetWindowWidth() - 16, knxt);
-        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, player_info_text, 128, 640, knxt);
-        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, column_info, 64, 640, knxt);
+        // === Draw info text ===
+        FL_DrawTextBDF(8, 8, stats_text, 512, FL_GetWindowWidth() - 16, font);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, player_info_text, 128, 640, font);
+        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, column_info, 64, 640, font);
 
         FL_Render();
     }
@@ -352,7 +262,7 @@ int main() {
     map_close(map);
     FL_FreeTexture(wall0);
 
-    FL_FreeFontBDF(knxt);
+    FL_FreeFontBDF(font);
     FL_Close();
 
     return 0;

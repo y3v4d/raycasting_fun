@@ -3,11 +3,13 @@
 
 typedef struct {
     float x, y;
-    float angle, vangle;
-
     float dx, dy;
 
     float move;
+    int strafe;
+    float turn;
+
+    float angle;
 } player_t;
 
 #endif

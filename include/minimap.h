@@ -4,12 +4,9 @@
 #include "map.h"
 #include "player.h"
 #include "entity.h"
+#include "vector.h"
 
 #define MINIMAP_MAX_POINTS 512
-
-typedef struct {
-    float x, y;
-} vec2f_t;
 
 typedef struct {
     int x, y;
