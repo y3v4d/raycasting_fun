@@ -35,8 +35,8 @@ void minimap_draw(const minimap_t *m) {
 
     for(int i = 0; i < m->points_count; ++i) {
         FL_DrawCircle(
-            m->x + m->points[i].x / GRID_SIZE * ratio,
-            m->y + m->points[i].y / GRID_SIZE * ratio,
+            m->x + m->points[i].x * ratio,
+            m->y + m->points[i].y * ratio,
             2,
             0x0000FF,
             true

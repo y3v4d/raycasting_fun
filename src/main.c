@@ -13,7 +13,7 @@
 #include "player.h"
 #include "vector.h"
 
-float z_buffer[PROJECTION_WIDTH] = { 0 };
+FL_Texture *wall0, *floor0;
 
 int main() {
     if(!FL_Initialize(PROJECTION_WIDTH, PROJECTION_HEIGHT))
@@ -29,14 +29,14 @@ int main() {
         exit(-1);
     }
 
-    FL_Texture *wall0 = FL_LoadTexture("data/wall0.bmp");
+    wall0 = FL_LoadTexture("data/wall0.bmp");
     if(!wall0) {
         FL_Close();
         exit(-1);
     }
 
-    FL_Texture *floor = FL_LoadTexture("data/floor0.bmp");
-    if(!floor) {
+    floor0 = FL_LoadTexture("data/floor0.bmp");
+    if(!floor0) {
         FL_Close();
         exit(-1);
     }
@@ -140,151 +140,17 @@ int main() {
       
         FL_ClearScreen();
 
-        // === DRAW FLOOR ===
-        for(int i = PROJECTION_HEIGHT >> 1; i < PROJECTION_HEIGHT; ++i) {
-            int p = (PROJECTION_HEIGHT >> 1) - i;
+        // === DRAW WORLD ===
+        r_draw_floor(&player);
+        r_draw_walls(map, &player);
 
-            float ray_dir0_x = player.dx - player.px;
-            float ray_dir0_y = player.dy - player.py;
-            float ray_dir1_x = player.dx + player.px;
-            float ray_dir1_y = player.dy + player.py;
-
-            const float player_z = PROJECTION_HEIGHT >> 1;
-
-            float r = -player_z / p;
-
-            float floorStepX = r * (ray_dir1_x - ray_dir0_x) / PROJECTION_WIDTH;
-            float floorStepY = r * (ray_dir1_y - ray_dir0_y) / PROJECTION_WIDTH;
-
-            float floorX = player.x + ray_dir0_x * r;
-            float floorY = player.y + ray_dir0_y * r;
-
-            if(mouse.y == i) {
-                snprintf(column_info, 64, "S: %d P: %d R: %f Floor (%.2f %.2f)\n", i, p, r, floorX, floorY);
-            }
-
-            for(int x = 0; x < PROJECTION_WIDTH; ++x) {
-                int mx = floorf(floorX), my = floorf(floorY);
-
-                int tx = (int)(floor->width * (floorX - mx)) & (floor->width - 1);
-                int ty = (int)(floor->height * (floorY - my)) & (floor->height - 1);
-
-                floorX += floorStepX;
-                floorY += floorStepY;
-
-                FL_DrawPoint(x, i, floor->data[ty * floor->width + tx]);
-            }
-        }
-
-        // === DRAW WALLS ===
-        for(int i = 0; i < PROJECTION_WIDTH; ++i) {
-            int mx = floorf(player.x), my = floorf(player.y); // map coordinates of the player
-            
-            float cam_x = (float)i * 2 / PROJECTION_WIDTH - 1;
-
-            float ray_dx = player.dx + player.px * cam_x;
-            float ray_dy = player.dy + player.py * cam_x;
-
-            // only relative distance matter, not the exact one
-            float delta_x = absf(1.f / ray_dx);
-            float delta_y = absf(1.f / ray_dy);
-
-            float curr_dx, curr_dy;
-
-            int map_step_x = 0, map_step_y = 0;
-            if(ray_dx >= 0) {
-                map_step_x = 1;
-                curr_dx = (mx + 1 - player.x) * delta_x;
-            } else {
-                map_step_x = -1;
-                curr_dx = (player.x - mx) * delta_x;
-            }
-
-            if(ray_dy >= 0) {
-                map_step_y = 1;
-                curr_dy = (my + 1 - player.y) * delta_y;
-            } else {
-                map_step_y = -1;
-                curr_dy = (player.y - my) * delta_y;
-            }
-
-            int side = 0; // 0 - horizontal 1 - vertical
-            int hit = 0;
-            for(int i = 0; i < 50; ++i) {
-                if(curr_dx < curr_dy) {
-                    mx += map_step_x;
-                    curr_dx += delta_x;
-                    side = 1;
-                } else {
-                    my += map_step_y;
-                    curr_dy += delta_y;
-                    side = 0;
-                }
-
-                if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) continue;
-                if(map->data[my * map->width + mx] != 0) {
-                    hit = map->data[my * map->width + mx];
-                    break;
-                }
-            }
-
-            float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
-            float offset;
-            if(side == 0) {
-                offset = player.x + distance * ray_dx;
-                offset -= floorf(offset);
-            } else {
-                offset = player.y + distance * ray_dy;
-                offset -= floorf(offset);
-            }
-
-            if(hit) {
-                float lineHeight = (float)PROJECTION_HEIGHT / distance;
-
-                r_draw_column_textured(i, offset, distance, wall0);
-                z_buffer[i] = distance;
-            } else {
-                z_buffer[i] = 1e30;
-            }
-
-            if(mouse.x == i) {
-                //snprintf(column_info, 64, "C: %d Z: %f", i, z_buffer[i]);
-            }
-        }
-
-         // === DRAW ENTITIES ===
-        {
-            vec2f_t Z = {
-                .x = entity.x - player.x,
-                .y = entity.y - player.y
-            };
-
-            const float w = 1.f / -(player.px * player.dy - player.py * player.dx);
-
-            float rx = w * (Z.x * player.dy - Z.y * player.dx);
-            float t = w * (Z.x * player.py - Z.y * player.px);
-
-            float x = (PROJECTION_WIDTH >> 1) * rx / t;
-
-            float half_screen = PROJECTION_HEIGHT >> 1;
-            float size = (float)PROJECTION_HEIGHT / t;
-
-            if(t > 0) {
-                for(int i = floorf(x - size / 2); i < floorf(x + size / 2); ++i) {
-                    int col = (PROJECTION_WIDTH >> 1) - i;
-                    if(col < 0 || col >= PROJECTION_WIDTH) continue;
-
-                    if(t < z_buffer[col]) {
-                        //FL_DrawLine((PROJECTION_WIDTH >> 1) - i, half_screen - size / 2, (PROJECTION_WIDTH >> 1) - i, half_screen + size / 2, 0xffff00);
-                    }
-                }
-            }
-        }
-
+        // === DRAW MINIMAP ===
         minimap_draw(&minimap);
+        
+        // === DRAW MOUSE COLUMN ===
         FL_DrawLine(mouse.x, 0, mouse.x, FL_GetWindowHeight() - 1, 0x0000ff);
 
-        // === Draw info text ===
+        // === DRAW DEBUG TEXT ===
         FL_DrawTextBDF(8, 8, stats_text, 512, FL_GetWindowWidth() - 16, font);
         FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, player_info_text, 128, 640, font);
         FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, column_info, 64, 640, font);
@@ -293,7 +159,7 @@ int main() {
     }
 
     map_close(map);
-    FL_FreeTexture(floor);
+    FL_FreeTexture(floor0);
     FL_FreeTexture(wall0);
 
     FL_FreeFontBDF(font);
