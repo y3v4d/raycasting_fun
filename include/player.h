@@ -4,6 +4,7 @@
 typedef struct {
     float x, y;
     float dx, dy;
+    float px, py;
 
     float move;
     int strafe;

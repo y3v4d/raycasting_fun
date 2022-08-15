@@ -9,6 +9,6 @@
 #define GRID_SIZE 32
 
 void r_draw_column(int column, float distance, uint32_t color);
-void r_draw_column_textured(int column, int offset, float distance, FL_Texture *texture);
+void r_draw_column_textured(int column, float offset, float distance, FL_Texture *texture);
 
 #endif

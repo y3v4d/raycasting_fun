@@ -53,6 +53,8 @@ int main() {
         .y = 6,
         .dx = 1,
         .dy = 0,
+        .px = 0,
+        .py = 0.66,
         .move = 0,
         .strafe = 0,
         .turn = 0
@@ -78,9 +80,6 @@ int main() {
     char column_info[64] = "C: - D: -";
     char player_info_text[128] = "";
     char stats_text[512];
-
-    float plane_x = 0;
-    float plane_y = 0.66;
 
     vec2f_t mouse = { 0 };
 
@@ -116,9 +115,9 @@ int main() {
         player.dx = player.dx * cos(player.turn) - player.dy * sin(player.turn); 
         player.dy = player.dy * cos(player.turn) + oldDx * sin(player.turn);
 
-        const float oldPlaneX = plane_x;
-        plane_x = plane_x * cos(player.turn) - plane_y * sin(player.turn);
-        plane_y = plane_y * cos(player.turn) + oldPlaneX * sin(player.turn);
+        const float oldPlaneX = player.px;
+        player.px = player.px * cos(player.turn) - player.py * sin(player.turn);
+        player.py = player.py * cos(player.turn) + oldPlaneX * sin(player.turn);
 
         if(player.strafe) {
             player.x += player.move * -player.dy * dt;
@@ -141,18 +140,14 @@ int main() {
       
         FL_ClearScreen();
 
-        const int mm_points_max = 1024;
-        vec2f_t mm_points[mm_points_max];
-        int mm_points_count = 0;
-
         // === DRAW FLOOR ===
         for(int i = PROJECTION_HEIGHT >> 1; i < PROJECTION_HEIGHT; ++i) {
             int p = (PROJECTION_HEIGHT >> 1) - i;
 
-            float ray_dir0_x = player.dx - plane_x;
-            float ray_dir0_y = player.dy - plane_y;
-            float ray_dir1_x = player.dx + plane_x;
-            float ray_dir1_y = player.dy + plane_y;
+            float ray_dir0_x = player.dx - player.px;
+            float ray_dir0_y = player.dy - player.py;
+            float ray_dir1_x = player.dx + player.px;
+            float ray_dir1_y = player.dy + player.py;
 
             const float player_z = PROJECTION_HEIGHT >> 1;
 
@@ -187,43 +182,42 @@ int main() {
             
             float cam_x = (float)i * 2 / PROJECTION_WIDTH - 1;
 
-            float r_dir_x = player.dx + plane_x * cam_x;
-            float r_dir_y = player.dy + plane_y * cam_x;
+            float ray_dx = player.dx + player.px * cam_x;
+            float ray_dy = player.dy + player.py * cam_x;
 
             // only relative distance matter, not the exact one
-            float d_dist_x = absf(1.f / r_dir_x);
-            float d_dist_y = absf(1.f / r_dir_y);
+            float delta_x = absf(1.f / ray_dx);
+            float delta_y = absf(1.f / ray_dy);
 
-            float curr_dist_y = 0;
-            float curr_dist_x = 0;
+            float curr_dx, curr_dy;
 
             int map_step_x = 0, map_step_y = 0;
-            if(r_dir_x >= 0) {
+            if(ray_dx >= 0) {
                 map_step_x = 1;
-                curr_dist_x = (mx + 1 - player.x) * d_dist_x;
+                curr_dx = (mx + 1 - player.x) * delta_x;
             } else {
                 map_step_x = -1;
-                curr_dist_x = (player.x - mx) * d_dist_x;
+                curr_dx = (player.x - mx) * delta_x;
             }
 
-            if(r_dir_y >= 0) {
+            if(ray_dy >= 0) {
                 map_step_y = 1;
-                curr_dist_y = (my + 1 - player.y) * d_dist_y;
+                curr_dy = (my + 1 - player.y) * delta_y;
             } else {
                 map_step_y = -1;
-                curr_dist_y = (player.y - my) * d_dist_y;
+                curr_dy = (player.y - my) * delta_y;
             }
 
             int side = 0; // 0 - horizontal 1 - vertical
             int hit = 0;
             for(int i = 0; i < 50; ++i) {
-                if(curr_dist_x < curr_dist_y) {
+                if(curr_dx < curr_dy) {
                     mx += map_step_x;
-                    curr_dist_x += d_dist_x;
+                    curr_dx += delta_x;
                     side = 1;
                 } else {
                     my += map_step_y;
-                    curr_dist_y += d_dist_y;
+                    curr_dy += delta_y;
                     side = 0;
                 }
 
@@ -234,23 +228,18 @@ int main() {
                 }
             }
 
-            float distance = 0;
-            if(side == 0) distance = curr_dist_y - d_dist_y;
-            else distance = curr_dist_x - d_dist_x;
-
-            float offset = 0;
+            float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
+            float offset;
             if(side == 0) {
-                offset = player.x + distance * r_dir_x;
+                offset = player.x + distance * ray_dx;
                 offset -= floorf(offset);
-                offset *= GRID_SIZE;
             } else {
-                offset = player.y + distance * r_dir_y;
+                offset = player.y + distance * ray_dy;
                 offset -= floorf(offset);
-                offset *= GRID_SIZE;
             }
 
             if(hit) {
-                float lineHeight = FL_GetWindowHeight() / distance;
+                float lineHeight = (float)PROJECTION_HEIGHT / distance;
 
                 r_draw_column_textured(i, offset, distance, wall0);
                 z_buffer[i] = distance;
@@ -270,10 +259,10 @@ int main() {
                 .y = entity.y - player.y
             };
 
-            const float w = 1.f / -(plane_x * player.dy - plane_y * player.dx);
+            const float w = 1.f / -(player.px * player.dy - player.py * player.dx);
 
             float rx = w * (Z.x * player.dy - Z.y * player.dx);
-            float t = w * (Z.x * plane_y - Z.y * plane_x);
+            float t = w * (Z.x * player.py - Z.y * player.px);
 
             float x = (PROJECTION_WIDTH >> 1) * rx / t;
 
