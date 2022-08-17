@@ -17,6 +17,6 @@ void r_draw_column(int column, float distance, uint32_t color);
 void r_draw_column_textured(int column, float offset, float distance, FL_Texture *texture);
 
 void r_draw_walls(const map_t *map, const player_t *p);
-void r_draw_floor(const player_t *p);
+void r_draw_floor(const map_t *map, const player_t *p);
 
 #endif

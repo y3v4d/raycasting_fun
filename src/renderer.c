@@ -1,5 +1,7 @@
 #include "renderer.h"
 
+#include <stdlib.h>
+
 #include <math.h>
 #include <stdio.h>
 
@@ -17,33 +19,25 @@ void r_draw_column(int column, float distance, uint32_t color) {
 }
 
 void r_draw_column_textured(int column, float offset, float distance, FL_Texture *texture) {
-    const float height = (float)FL_GetWindowHeight() / distance;
+    const float height = (float)PROJECTION_HEIGHT / distance;
 
-    if(height < PROJECTION_HEIGHT) {
-        const float half_height = height / 2;
+    int draw_start = (PROJECTION_HEIGHT >> 1) - height / 2;
+    if(draw_start < 0) draw_start = 0;
 
-        const float tex_step = texture->height / height;
-        float tex_current = 0;
+    int draw_end = (PROJECTION_HEIGHT >> 1) + height / 2;
+    if(draw_end >= PROJECTION_HEIGHT) draw_end = PROJECTION_HEIGHT - 1;
 
-        uint32_t *p = texture->data + (int)floorf(offset * texture->width);
-        for(int i = floorf((PROJECTION_HEIGHT >> 1) - half_height); i < floorf((PROJECTION_HEIGHT >> 1) + half_height); ++i) {
-            uint32_t color = *(p + (int)(floorf(tex_current)) * texture->width);
-            FL_DrawPoint(column, i, color);
+    const int tex_x = (int)floorf(offset * texture->width) & (texture->width - 1);
+    const float tex_step = (float)texture->height / height;
+    float tex_pos = draw_start > 0 ? 0 : ((height - PROJECTION_HEIGHT) / 2) * tex_step;
 
-            tex_current += tex_step;
-        }
-    } else {
-        const float tex_step = texture->height / height;
+    for(int i = draw_start; i < draw_end; ++i) {
+        int tex_y = (int)tex_pos & (texture->height - 1);
         
-        float diff = height - PROJECTION_HEIGHT;
-        float tex_current = diff / 2 * tex_step;
+        uint32_t color = texture->data[tex_y * texture->width + tex_x];
+        tex_pos += tex_step;
 
-        uint32_t *p = texture->data + (int)floorf(offset * texture->width);
-        for(int i = 0; i < PROJECTION_HEIGHT; ++i) {
-            FL_DrawPoint(column, i, *(p + (int)(floorf(tex_current) * texture->width)));
-
-            tex_current += tex_step;
-        }
+        FL_DrawPoint(column, i, color);
     }
 }
 
@@ -120,14 +114,14 @@ void r_draw_walls(const map_t *map, const player_t *p) {
     }
 }
 
-void r_draw_floor(const player_t *p) {
+void r_draw_floor(const map_t *map, const player_t *p) {
+    float ray_dir0_x = p->dx - p->px;
+    float ray_dir0_y = p->dy - p->py;
+    float ray_dir1_x = p->dx + p->px;
+    float ray_dir1_y = p->dy + p->py;
+
     for(int i = PROJECTION_HEIGHT >> 1; i < PROJECTION_HEIGHT; ++i) {
         int d = (PROJECTION_HEIGHT >> 1) - i;
-
-        float ray_dir0_x = p->dx - p->px;
-        float ray_dir0_y = p->dy - p->py;
-        float ray_dir1_x = p->dx + p->px;
-        float ray_dir1_y = p->dy + p->py;
 
         const float player_z = PROJECTION_HEIGHT >> 1;
 
@@ -139,6 +133,7 @@ void r_draw_floor(const player_t *p) {
         float floorX = p->x + ray_dir0_x * r;
         float floorY = p->y + ray_dir0_y * r;
 
+        const uint32_t *t = floor0->data;
         for(int x = 0; x < PROJECTION_WIDTH; ++x) {
             int mx = floorf(floorX), my = floorf(floorY);
 
@@ -148,7 +143,11 @@ void r_draw_floor(const player_t *p) {
             floorX += floorStepX;
             floorY += floorStepY;
 
-            FL_DrawPoint(x, i, floor0->data[ty * floor0->width + tx]);
+            if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
+            uint32_t color = floor0->data[ty * floor0->width + tx];
+
+            FL_DrawPoint(x, i, color);
+            //FL_DrawPoint(x, (PROJECTION_HEIGHT >> 1) + d, color);
         }
     }
 }

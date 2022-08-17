@@ -141,17 +141,17 @@ int main() {
         FL_ClearScreen();
 
         // === DRAW WORLD ===
-        r_draw_floor(&player);
+        r_draw_floor(map, &player);
         r_draw_walls(map, &player);
 
         // === DRAW MINIMAP ===
         minimap_draw(&minimap);
         
         // === DRAW MOUSE COLUMN ===
-        FL_DrawLine(mouse.x, 0, mouse.x, FL_GetWindowHeight() - 1, 0x0000ff);
+        FL_DrawLine(mouse.x, 0, mouse.x, PROJECTION_HEIGHT - 1, 0x0000ff);
 
         // === DRAW DEBUG TEXT ===
-        FL_DrawTextBDF(8, 8, stats_text, 512, FL_GetWindowWidth() - 16, font);
+        FL_DrawTextBDF(8, 8, stats_text, 512, PROJECTION_WIDTH - 16, font);
         FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, player_info_text, 128, 640, font);
         FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, column_info, 64, 640, font);
 
