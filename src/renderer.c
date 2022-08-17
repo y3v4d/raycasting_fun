@@ -144,10 +144,7 @@ void r_draw_floor(const map_t *map, const player_t *p) {
             floorY += floorStepY;
 
             if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
-            uint32_t color = floor0->data[ty * floor0->width + tx];
-
-            FL_DrawPoint(x, i, color);
-            //FL_DrawPoint(x, (PROJECTION_HEIGHT >> 1) + d, color);
+            FL_DrawPoint(x, i, floor0->data[ty * floor0->width + tx]);
         }
     }
 }
