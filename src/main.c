@@ -29,13 +29,13 @@ int main() {
         exit(-1);
     }
 
-    wall0 = FL_LoadTexture("data/wall0.bmp");
+    wall0 = FL_LoadTexture("data/textures/wall0.bmp");
     if(!wall0) {
         FL_Close();
         exit(-1);
     }
 
-    floor0 = FL_LoadTexture("data/floor0.bmp");
+    floor0 = FL_LoadTexture("data/textures/floor0.bmp");
     if(!floor0) {
         FL_Close();
         exit(-1);
