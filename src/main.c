@@ -16,7 +16,7 @@
 FL_Texture *wall0, *floor0;
 
 int main() {
-    if(!FL_Initialize(PROJECTION_WIDTH, PROJECTION_HEIGHT))
+    if(!FL_Initialize(PROJECTION_WIDTH, PROJECTION_HEIGHT + 50))
         exit(-1);
 
     FL_SetTitle("Raycasting Test");
@@ -25,6 +25,12 @@ int main() {
 
     FL_FontBDF *font = FL_LoadFontBDF("data/fonts/knxt.bdf");
     if(!font) {
+        FL_Close();
+        exit(-1);
+    }
+
+    FL_Texture *entity0 = FL_LoadTexture("data/textures/pillar.bmp");
+    if(!entity0) {
         FL_Close();
         exit(-1);
     }
@@ -49,12 +55,12 @@ int main() {
     }
 
     player_t player = { 
-        .x = 10, 
+        .x = 9, 
         .y = 6,
         .dx = 1,
         .dy = 0,
         .px = 0,
-        .py = 0.66,
+        .py = (float)(PROJECTION_WIDTH >> 1) / PROJECTION_HEIGHT,
         .move = 0,
         .strafe = 0,
         .turn = 0
@@ -144,6 +150,34 @@ int main() {
         r_draw_floor(map, &player);
         r_draw_walls(map, &player);
 
+        {
+            vec2f_t Z = {
+                .x = entity.x - player.x,
+                .y = entity.y - player.y
+            };
+
+            const float w = 1.f / -(player.px * player.dy - player.py * player.dx);
+
+            float rx = w * (Z.x * player.dy - Z.y * player.dx);
+            float t = w * (Z.x * player.py - Z.y * player.px);
+
+            if(t > 0) {
+                float x = (PROJECTION_WIDTH >> 1) * rx / t;
+                float size = (float)PROJECTION_HEIGHT / t;
+
+                for(int i = 0; i < (int)size; ++i) {
+                    const float offset = (float)i / size;
+
+                    int col = (PROJECTION_WIDTH >> 1) - x - size / 2 + i;
+                    if(col < 0 || col >= PROJECTION_WIDTH) continue;
+
+                    if(t < z_buffer[col]) {
+                        r_draw_column_textured_alpha(col, offset, t, entity0);
+                    }
+                }
+            }
+        }
+
         // === DRAW MINIMAP ===
         minimap_draw(&minimap);
         
@@ -151,14 +185,15 @@ int main() {
         FL_DrawLine(mouse.x, 0, mouse.x, PROJECTION_HEIGHT - 1, 0x0000ff);
 
         // === DRAW DEBUG TEXT ===
-        FL_DrawTextBDF(8, 8, stats_text, 512, PROJECTION_WIDTH - 16, font);
-        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 52, player_info_text, 128, 640, font);
-        FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, column_info, 64, 640, font);
+        FL_DrawTextBDF(4, FL_GetWindowHeight() - 27, stats_text, 512, FL_GetWindowWidth(), font);
+        FL_DrawTextBDF(4, FL_GetWindowHeight() - 51, player_info_text, 128, 640, font);
+        //FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, column_info, 64, 640, font);
 
         FL_Render();
     }
 
     map_close(map);
+    FL_FreeTexture(entity0);
     FL_FreeTexture(floor0);
     FL_FreeTexture(wall0);
 

@@ -18,6 +18,32 @@ void r_draw_column(int column, float distance, uint32_t color) {
     FL_DrawLine(column, (PROJECTION_HEIGHT >> 1) - half_height, column, (PROJECTION_HEIGHT >> 1) + half_height, color);
 }
 
+void r_draw_column_textured_alpha(int column, float offset, float distance, FL_Texture *texture) {
+    const float height = (float)PROJECTION_HEIGHT / distance;
+
+    int draw_start = (PROJECTION_HEIGHT >> 1) - height / 2;
+    if(draw_start < 0) draw_start = 0;
+
+    int draw_end = (PROJECTION_HEIGHT >> 1) + height / 2;
+    if(draw_end >= PROJECTION_HEIGHT) draw_end = PROJECTION_HEIGHT - 1;
+
+    const int tex_x = (int)floorf(offset * texture->width) & (texture->width - 1);
+    const float tex_step = (float)texture->height / height;
+    float tex_pos = draw_start > 0 ? 0 : ((height - PROJECTION_HEIGHT) / 2) * tex_step;
+
+    for(int i = draw_start; i < draw_end; ++i) {
+        int tex_y = (int)tex_pos & (texture->height - 1);
+        
+        uint32_t color = texture->data[tex_y * texture->width + tex_x];
+        //if((color | 0x000000)) continue;
+
+        tex_pos += tex_step;
+        if(color == 0) continue;
+
+        FL_DrawPoint(column, i, color);
+    }
+}
+
 void r_draw_column_textured(int column, float offset, float distance, FL_Texture *texture) {
     const float height = (float)PROJECTION_HEIGHT / distance;
 
@@ -144,7 +170,10 @@ void r_draw_floor(const map_t *map, const player_t *p) {
             floorY += floorStepY;
 
             if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
-            FL_DrawPoint(x, i, floor0->data[ty * floor0->width + tx]);
+
+            uint32_t color = floor0->data[ty * floor0->width + tx];
+            FL_DrawPoint(x, i, color);
+            //FL_DrawPoint(x, (PROJECTION_HEIGHT >> 1) + d, color);
         }
     }
 }

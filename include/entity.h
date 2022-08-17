@@ -1,13 +1,14 @@
 #ifndef __ENTITY__
 #define __ENTITY__
 
+#include "vector.h"
 #include <follia.h>
 
 typedef struct {
     float x, y;
-    float w, h;
+    float dx, dy;
 
-    FL_Texture *texture;
+    FL_Texture *sprite;
 } entity_t;
 
 #endif

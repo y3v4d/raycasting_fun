@@ -26,16 +26,12 @@ void debug_update_stats() {
 }
 
 void debug_print_stats(char *s, int max_size) {
-    const double dt = FL_GetDeltaTime();
-
     snprintf(
         s, max_size, 
-        "Clear: %f\nRender: %f\nClear to render: %f\nAll: %f\nDelta: %f\nFPS: %f",
+        "C: %.4f R: %.4f CTR: %.4f All: %.4f",
         average_array(averages[FL_TIMER_CLEAR_SCREEN], STATS_AVERAGE_COUNT),
         average_array(averages[FL_TIMER_RENDER], STATS_AVERAGE_COUNT),
         average_array(averages[FL_TIMER_CLEAR_TO_RENDER], STATS_AVERAGE_COUNT),
-        average_array(averages[FL_TIMER_ALL], STATS_AVERAGE_COUNT),
-        dt,
-        1000.0 / dt
+        average_array(averages[FL_TIMER_ALL], STATS_AVERAGE_COUNT)
     );
 }
