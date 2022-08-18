@@ -86,8 +86,10 @@ int main() {
     char column_info[64] = "C: - D: -";
     char player_info_text[128] = "";
     char stats_text[512];
+    char txt_more_timers[512];
 
     vec2f_t mouse = { 0 };
+    FL_Timer texts_timer = { 0 };
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
@@ -141,15 +143,21 @@ int main() {
             player.dy / player.dx
         );
 
-        debug_update_stats();
-        debug_print_stats(stats_text, 512);
       
         FL_ClearScreen();
 
         // === DRAW WORLD ===
-        r_draw_floor(map, &player);
-        r_draw_walls(map, &player);
+        FL_Timer floor_timer, walls_timer, entity_timer;
 
+        FL_StartTimer(&floor_timer);
+        r_draw_floor(map, &player);
+        FL_StopTimer(&floor_timer);
+
+        FL_StartTimer(&walls_timer);
+        r_draw_walls(map, &player);
+        FL_StopTimer(&walls_timer);
+
+        FL_StartTimer(&entity_timer);
         {
             vec2f_t Z = {
                 .x = entity.x - player.x,
@@ -166,16 +174,24 @@ int main() {
                 float size = (float)PROJECTION_HEIGHT / t;
 
                 for(int i = 0; i < (int)size; ++i) {
-                    const float offset = (float)i / size;
-
                     int col = (PROJECTION_WIDTH >> 1) - x - size / 2 + i;
                     if(col < 0 || col >= PROJECTION_WIDTH) continue;
 
                     if(t < z_buffer[col]) {
-                        r_draw_column_textured_alpha(col, offset, t, entity0);
+                        r_draw_column_textured_alpha(col, (float)i / size, t, entity0);
                     }
                 }
             }
+        }
+        FL_StopTimer(&entity_timer);
+
+        FL_StopTimer(&texts_timer);
+        if(texts_timer.delta >= 100) {
+            FL_StartTimer(&texts_timer);
+
+            debug_update_stats();
+            debug_print_stats(stats_text, 512);
+            snprintf(txt_more_timers, 512, "F: %.4f W: %.4f E: %.4f", floor_timer.delta, walls_timer.delta, entity_timer.delta);
         }
 
         // === DRAW MINIMAP ===
@@ -186,7 +202,8 @@ int main() {
 
         // === DRAW DEBUG TEXT ===
         FL_DrawTextBDF(4, FL_GetWindowHeight() - 27, stats_text, 512, FL_GetWindowWidth(), font);
-        FL_DrawTextBDF(4, FL_GetWindowHeight() - 51, player_info_text, 128, 640, font);
+        FL_DrawTextBDF(4, FL_GetWindowHeight() - 51, txt_more_timers, 512, FL_GetWindowWidth(), font);
+        //FL_DrawTextBDF(4, FL_GetWindowHeight() - 51, player_info_text, 128, 640, font);
         //FL_DrawTextBDF(4, PROJECTION_HEIGHT - 28, column_info, 64, 640, font);
 
         FL_Render();

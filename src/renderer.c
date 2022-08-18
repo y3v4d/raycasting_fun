@@ -19,6 +19,7 @@ void r_draw_column(int column, float distance, uint32_t color) {
 }
 
 void r_draw_column_textured_alpha(int column, float offset, float distance, FL_Texture *texture) {
+    uint32_t *p = FL_GetFrameBuffer();
     const float height = (float)PROJECTION_HEIGHT / distance;
 
     int draw_start = (PROJECTION_HEIGHT >> 1) - height / 2;
@@ -33,18 +34,18 @@ void r_draw_column_textured_alpha(int column, float offset, float distance, FL_T
 
     for(int i = draw_start; i < draw_end; ++i) {
         int tex_y = (int)tex_pos & (texture->height - 1);
+        tex_pos += tex_step;
         
         uint32_t color = texture->data[tex_y * texture->width + tex_x];
-        //if((color | 0x000000)) continue;
-
-        tex_pos += tex_step;
         if(color == 0) continue;
 
-        FL_DrawPoint(column, i, color);
+        *(p + column + i * PROJECTION_WIDTH) = color;
     }
 }
 
 void r_draw_column_textured(int column, float offset, float distance, FL_Texture *texture) {
+    uint32_t *p = FL_GetFrameBuffer();
+
     const float height = (float)PROJECTION_HEIGHT / distance;
 
     int draw_start = (PROJECTION_HEIGHT >> 1) - height / 2;
@@ -63,7 +64,8 @@ void r_draw_column_textured(int column, float offset, float distance, FL_Texture
         uint32_t color = texture->data[tex_y * texture->width + tex_x];
         tex_pos += tex_step;
 
-        FL_DrawPoint(column, i, color);
+        *(p + column + i * PROJECTION_WIDTH) = color;
+        //FL_DrawPoint(column, i, color);
     }
 }
 
@@ -141,6 +143,7 @@ void r_draw_walls(const map_t *map, const player_t *p) {
 }
 
 void r_draw_floor(const map_t *map, const player_t *p) {
+    uint32_t *fb = FL_GetFrameBuffer();
     float ray_dir0_x = p->dx - p->px;
     float ray_dir0_y = p->dy - p->py;
     float ray_dir1_x = p->dx + p->px;
@@ -159,8 +162,11 @@ void r_draw_floor(const map_t *map, const player_t *p) {
         float floorX = p->x + ray_dir0_x * r;
         float floorY = p->y + ray_dir0_y * r;
 
-        const uint32_t *t = floor0->data;
-        for(int x = 0; x < PROJECTION_WIDTH; ++x) {
+        uint32_t *t = floor0->data;
+        uint32_t *fbc = fb + i * PROJECTION_WIDTH;
+
+        int x = PROJECTION_WIDTH;
+        while(x--) {
             int mx = floorf(floorX), my = floorf(floorY);
 
             int tx = (int)(floor0->width * (floorX - mx)) & (floor0->width - 1);
@@ -169,11 +175,10 @@ void r_draw_floor(const map_t *map, const player_t *p) {
             floorX += floorStepX;
             floorY += floorStepY;
 
-            if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
 
-            uint32_t color = floor0->data[ty * floor0->width + tx];
-            FL_DrawPoint(x, i, color);
-            //FL_DrawPoint(x, (PROJECTION_HEIGHT >> 1) + d, color);
+            uint32_t color = *(t + ty * floor0->width + tx);
+            *(fbc + PROJECTION_WIDTH - 1 - x) = color;
+            //*(fb + (PROJECTION_HEIGHT - i - 1) * PROJECTION_WIDTH + PROJECTION_WIDTH - 1 - x) = color;
         }
     }
 }

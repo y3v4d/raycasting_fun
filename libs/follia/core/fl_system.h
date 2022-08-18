@@ -4,6 +4,7 @@
 #include "fl_utils.h"
 #include "fl_event.h"
 
+#include <X11/Xlib.h>
 #include <stdint.h>
 
 /*
@@ -16,6 +17,11 @@ FL_Bool FL_Initialize(int width, int height); // only software renderer
 void FL_Close();
 
 FL_Bool FL_WindowShouldClose();
+
+/**
+ * **WARNING**: only use this function when you really need direct access to a frame buffer.
+ */
+uint32_t* FL_GetFrameBuffer();
 
 /*
  * FL_GetEvent
