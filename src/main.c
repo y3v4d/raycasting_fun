@@ -29,7 +29,7 @@ int main() {
         exit(-1);
     }
 
-    FL_Texture *entity0 = FL_LoadTexture("data/textures/pillar.bmp");
+    FL_Texture *entity0 = FL_LoadTexture("data/textures/borb.bmp");
     if(!entity0) {
         FL_Close();
         exit(-1);
@@ -70,6 +70,13 @@ int main() {
         .x = 11,
         .y = 6
     };
+
+    entity_t entities[2];
+    entities[0].x = 10;
+    entities[0].y = 6;
+
+    entities[1].x = 11;
+    entities[1].y = 6;
 
     minimap_t minimap = {
         .w = 128,
@@ -159,26 +166,29 @@ int main() {
 
         FL_StartTimer(&entity_timer);
         {
-            vec2f_t Z = {
-                .x = entity.x - player.x,
-                .y = entity.y - player.y
-            };
-
             const float w = 1.f / -(player.px * player.dy - player.py * player.dx);
 
-            float rx = w * (Z.x * player.dy - Z.y * player.dx);
-            float t = w * (Z.x * player.py - Z.y * player.px);
+            for(int i = 0; i < 1; ++i) {
+                vec2f_t Z = {
+                    .x = entities[i].x - player.x,
+                    .y = entities[i].y - player.y
+                };
 
-            if(t > 0) {
-                float x = (PROJECTION_WIDTH >> 1) * rx / t;
-                float size = (float)PROJECTION_HEIGHT / t;
+                float rx = w * (Z.x * player.dy - Z.y * player.dx);
+                float t = w * (Z.x * player.py - Z.y * player.px);
 
-                for(int i = 0; i < (int)size; ++i) {
-                    int col = (PROJECTION_WIDTH >> 1) - x - size / 2 + i;
-                    if(col < 0 || col >= PROJECTION_WIDTH) continue;
+                if(t > 0) {
+                    float x = (PROJECTION_WIDTH >> 1) * rx / t;
+                    float size = (float)PROJECTION_HEIGHT / t;
 
-                    if(t < z_buffer[col]) {
-                        r_draw_column_textured_alpha(col, (float)i / size, t, entity0);
+                    for(int i = 0; i < (int)size; ++i) {
+                        int col = (PROJECTION_WIDTH >> 1) - x - size / 2 + i;
+                        if(col < 0 || col >= PROJECTION_WIDTH) continue;
+
+                        if(t < z_buffer[col]) {
+                            r_draw_column_textured_alpha(col, (float)i / size, t, entity0);
+                            z_buffer[col] = t;
+                        }
                     }
                 }
             }
