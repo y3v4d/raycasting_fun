@@ -93,7 +93,11 @@ int main(int argc, char **argv) {
                     int mx = floorf((mouse_pos.x - position.x) / grid_size), my = floorf((mouse_pos.y - position.y) / grid_size);
 
                     if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
-                    map->data[my * map->width + mx] = !map->data[my * map->width + mx];
+                    uint8_t *tile = map->data + my * map->width + mx;
+                    *tile += 1;
+                    if(*tile >= 3) {
+                        *tile = 0;
+                    }
                 } else if(event.mouse.button == 3) {
                     is_moving = false;
                 }
@@ -112,7 +116,12 @@ int main(int argc, char **argv) {
         for(int y = 0; y < map->height; ++y) {
             for(int x = 0; x < map->width; ++x) {
                 int rx = floorf(position.x) + x * grid_size, ry = floorf(position.y) + y * grid_size;
-                uint32_t color = (map->data[y * map->width + x] == 0 ? 0x6666aa : 0xaaaa66);
+                uint8_t *tile = map->data + y * map->width + x;
+                uint32_t color;
+
+                if(*tile == 0) color = 0x6666aa;
+                else if(*tile == 1) color = 0xaaaa66;
+                else if(*tile == 2) color = 0xaa66aa;
 
                 FL_DrawRect(rx, ry, grid_size, grid_size, color, true);
                 FL_DrawRect(rx, ry, grid_size, grid_size, 0, false);

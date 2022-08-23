@@ -8,3 +8,6 @@ compile:
 
 run:
 	./build/raycasting
+
+editor:
+	./build/editor/editor ./data/map0.data

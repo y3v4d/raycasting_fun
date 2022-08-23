@@ -7,6 +7,8 @@
 
 float z_buffer[PROJECTION_WIDTH] = { 0 };
 
+float test = 0;
+
 inline __attribute__((always_inline))
 float absf(float n) {
     return n < 0 ? -n : n;
@@ -22,10 +24,10 @@ void r_draw_column_textured_alpha(int column, float offset, float distance, FL_T
     uint32_t *p = FL_GetFrameBuffer();
     const float height = (float)PROJECTION_HEIGHT / distance;
 
-    int draw_start = (PROJECTION_HEIGHT >> 1) - height / 2;
-    if(draw_start < 0) draw_start = 0;
-
     int draw_end = (PROJECTION_HEIGHT >> 1) + height / 2;
+    int draw_start = draw_end - height;
+
+    if(draw_start < 0) draw_start = 0;
     if(draw_end >= PROJECTION_HEIGHT) draw_end = PROJECTION_HEIGHT - 1;
 
     const int tex_x = (int)floorf(offset * texture->width) & (texture->width - 1);
@@ -43,15 +45,52 @@ void r_draw_column_textured_alpha(int column, float offset, float distance, FL_T
     }
 }
 
+void draw_column_textured(int column, float offset, float distance, float wall_height, float wall_z, FL_Texture *texture) {
+    uint32_t *p = FL_GetFrameBuffer();
+
+    const float player_z = PROJECTION_HEIGHT >> 1;
+    const float z = player_z - wall_z;
+
+    const float height = (float)wall_height / distance;
+
+    int draw_end = (PROJECTION_HEIGHT >> 1) + z / distance;
+    int draw_start = draw_end - height;
+
+    if(draw_start < 0) draw_start = 0;
+    if(draw_end >= PROJECTION_HEIGHT) draw_end = PROJECTION_HEIGHT - 1;
+    if(draw_end >= test) draw_end = test;
+
+    const int tex_x = (int)floorf(offset * texture->width) & (texture->width - 1);
+    const float tex_step = (float)texture->height / height;
+    float tex_pos = draw_start > 0 ? 0 : ((height - PROJECTION_HEIGHT) / 2) * tex_step;
+
+    for(int i = draw_start; i < draw_end; ++i) {
+        int tex_y = (int)tex_pos & (texture->height - 1);
+        
+        uint32_t color = texture->data[tex_y * texture->width + tex_x];
+        tex_pos += tex_step;
+
+        *(p + column + i * PROJECTION_WIDTH) = color;
+    }
+
+    test = draw_start;
+}
+
 void r_draw_column_textured(int column, float offset, float distance, FL_Texture *texture) {
     uint32_t *p = FL_GetFrameBuffer();
 
-    const float height = (float)PROJECTION_HEIGHT / distance;
+    const float wall_height = PROJECTION_HEIGHT >> 1;
+    const float player_z = PROJECTION_HEIGHT >> 1;
+    const float wall_z = 0;
 
-    int draw_start = (PROJECTION_HEIGHT >> 1) - height / 2;
+    const float z = player_z - wall_z;
+
+    const float height = (float)wall_height / distance;
+
+    int draw_end = (PROJECTION_HEIGHT >> 1) + z / distance;
+    int draw_start = draw_end - height;
+
     if(draw_start < 0) draw_start = 0;
-
-    int draw_end = (PROJECTION_HEIGHT >> 1) + height / 2;
     if(draw_end >= PROJECTION_HEIGHT) draw_end = PROJECTION_HEIGHT - 1;
 
     const int tex_x = (int)floorf(offset * texture->width) & (texture->width - 1);
@@ -71,6 +110,7 @@ void r_draw_column_textured(int column, float offset, float distance, FL_Texture
 
 void r_draw_walls(const map_t *map, const player_t *p) {
     for(int i = 0; i < PROJECTION_WIDTH; ++i) {
+        test = PROJECTION_HEIGHT;
         int mx = floorf(p->x), my = floorf(p->y); // map coordinates of the player
         
         float cam_x = (float)i * 2 / PROJECTION_WIDTH - 1;
@@ -103,7 +143,7 @@ void r_draw_walls(const map_t *map, const player_t *p) {
 
         int side = 0; // 0 - horizontal 1 - vertical
         int hit = 0;
-        for(int i = 0; i < 50; ++i) {
+        for(int j = 0; j < 50; ++j) {
             if(curr_dx < curr_dy) {
                 mx += map_step_x;
                 curr_dx += delta_x;
@@ -117,28 +157,25 @@ void r_draw_walls(const map_t *map, const player_t *p) {
             if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) continue;
             if(map->data[my * map->width + mx] != 0) {
                 hit = map->data[my * map->width + mx];
-                break;
+
+                float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
+                float offset;
+                if(side == 0) {
+                    offset = p->x + distance * ray_dx;
+                    offset -= floorf(offset);
+                } else {
+                    offset = p->y + distance * ray_dy;
+                    offset -= floorf(offset);
+                }
+
+                float height = 0;
+                if(hit == 1) height = PROJECTION_HEIGHT;
+                else height = 150;
+
+                draw_column_textured(i, offset, distance, height, 0, wall0);
+                z_buffer[i] = distance;
             }
-        }
-
-        float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
-        float offset;
-        if(side == 0) {
-            offset = p->x + distance * ray_dx;
-            offset -= floorf(offset);
-        } else {
-            offset = p->y + distance * ray_dy;
-            offset -= floorf(offset);
-        }
-
-        if(hit) {
-            float lineHeight = (float)PROJECTION_HEIGHT / distance;
-
-            r_draw_column_textured(i, offset, distance, wall0);
-            z_buffer[i] = distance;
-        } else {
-            z_buffer[i] = 1e30;
-        }
+        }        
     }
 }
 

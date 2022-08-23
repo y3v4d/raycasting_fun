@@ -186,7 +186,7 @@ int main() {
                         if(col < 0 || col >= PROJECTION_WIDTH) continue;
 
                         if(t < z_buffer[col]) {
-                            r_draw_column_textured_alpha(col, (float)i / size, t, entity0);
+                            //r_draw_column_textured_alpha(col, (float)i / size, t, entity0);
                             z_buffer[col] = t;
                         }
                     }
