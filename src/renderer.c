@@ -114,7 +114,12 @@ void r_draw_walls(const map_t *map, const player_t *p) {
         float last_wall_height = 0;
 
         int side = 0; // 0 - horizontal 1 - vertical
-        int hit = 0;
+        int hit = map->data[my * map->width + mx];
+
+        float wall_height = 0;
+        if(hit == 1) wall_height = PROJECTION_HEIGHT;
+        else if(hit == 2) wall_height = PROJECTION_HEIGHT >> 2;
+
         for(int j = 0; j < 50; ++j) {
             if(curr_dx < curr_dy) {
                 mx += map_step_x;
@@ -130,9 +135,10 @@ void r_draw_walls(const map_t *map, const player_t *p) {
 
             hit = map->data[my * map->width + mx];
 
-            float wall_height = 0;
+            last_wall_height = wall_height;
             if(hit == 1) wall_height = PROJECTION_HEIGHT;
             else if(hit == 2) wall_height = PROJECTION_HEIGHT >> 2;
+            else wall_height = 0;
 
             int new_top = highest_top;
             const float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
@@ -167,7 +173,7 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                 if(floor_end < new_top) new_top = floor_end;
             }
 
-            last_wall_height = wall_height;
+            
             highest_top = new_top;
 
             /*
