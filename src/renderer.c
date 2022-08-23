@@ -79,10 +79,8 @@ void r_draw_walls(const map_t *map, const player_t *p) {
     uint32_t *fb = FL_GetFrameBuffer();
 
     for(int i = 0; i < PROJECTION_WIDTH; ++i) {
-        float last_wall_height = 0;
-        int last_v_scanline = 1e8;
-
         int mx = floorf(p->x), my = floorf(p->y); // map coordinates of the player
+        if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) break;
         
         float cam_x = (float)i * 2 / PROJECTION_WIDTH - 1;
 
@@ -112,6 +110,9 @@ void r_draw_walls(const map_t *map, const player_t *p) {
             curr_dy = (p->y - my) * delta_y;
         }
 
+        float highest_top = PROJECTION_HEIGHT - 1;
+        float last_wall_height = 0;
+
         int side = 0; // 0 - horizontal 1 - vertical
         int hit = 0;
         for(int j = 0; j < 50; ++j) {
@@ -133,44 +134,41 @@ void r_draw_walls(const map_t *map, const player_t *p) {
             if(hit == 1) wall_height = PROJECTION_HEIGHT;
             else if(hit == 2) wall_height = PROJECTION_HEIGHT >> 2;
 
-            if(wall_height != last_wall_height) {
-                float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
+            int new_top = highest_top;
+            const float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
+            int wall_bottom = (PROJECTION_HEIGHT >> 1) + p->z / distance;
 
-                int last_wall_top = last_v_scanline;
-                int wall_bottom = (PROJECTION_HEIGHT >> 1) + (p->z - last_wall_height) / distance;
-                int wall_top = wall_bottom;
+            // draw wall if it is a wall
+            if(wall_height != 0) {
+                const float height = (float)wall_height / distance;
+                int wall_top = wall_bottom - height;
 
-                // draw wall if it is a wall
-                if(wall_height != 0) {
-                    const float height = (float)(wall_height - last_wall_height) / distance;
-                    wall_top = wall_bottom - height;
+                if(wall_top < 0) wall_top = 0;
+                if(wall_bottom >= PROJECTION_HEIGHT) wall_bottom = PROJECTION_HEIGHT - 1;
+                if(wall_bottom > highest_top) wall_bottom = highest_top;
 
-                    if(wall_top > last_wall_top) continue;
-
-                    if(wall_bottom >= last_wall_top) wall_bottom = last_wall_top;
-                    if(wall_bottom >= PROJECTION_HEIGHT) wall_bottom = PROJECTION_HEIGHT - 1;
-
-                    if(wall_top < 0) wall_top = 0;
-
-                    for(int y = wall_top; y < wall_bottom; ++y) {
-                        uint32_t color = side == 0 ? 0xffff00 : 0xaaaa00;
-                        *(fb + i + y * PROJECTION_WIDTH) = color;
-                    }
+                for(int y = wall_top; y < wall_bottom; ++y) {
+                    uint32_t color = side == 0 ? 0xffff00 : 0xaaaa00;
+                    *(fb + i + y * PROJECTION_WIDTH) = color;
                 }
 
-                if(wall_bottom < last_v_scanline) {
-                    if(wall_bottom < 0) wall_bottom = 0;
-                    if(last_wall_top >= PROJECTION_HEIGHT) last_wall_top = PROJECTION_HEIGHT - 1;
-                    for(int y = wall_bottom; y < last_wall_top; ++y) {
-                        uint32_t color = last_wall_height == 0 ? 0xff0000 : 0x0000ff;
-                        *(fb + i + y * PROJECTION_WIDTH) = color;
-                    }
+                if(wall_top < highest_top) new_top = wall_top;
+            }
+
+            int floor_end = (PROJECTION_HEIGHT >> 1) + (p->z - last_wall_height) / distance;
+            if(floor_end <= highest_top) {
+                if(floor_end < 0) floor_end = 0;
+                for(int y = floor_end; y < highest_top; ++y) {
+                    if(last_wall_height == 0) break;
+                    uint32_t color = last_wall_height == 0 ? 0xff0000 : 0x0000ff;
+                    *(fb + i + y * PROJECTION_WIDTH) = color;
                 }
 
-                last_v_scanline = wall_top;
+                if(floor_end < new_top) new_top = floor_end;
             }
 
             last_wall_height = wall_height;
+            highest_top = new_top;
 
             /*
                 float offset;
@@ -182,6 +180,8 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                     offset -= floorf(offset);
                 }
             }*/
+
+            
         }        
     }
 }
