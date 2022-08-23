@@ -7,8 +7,6 @@
 
 float z_buffer[PROJECTION_WIDTH] = { 0 };
 
-float test = 0;
-
 inline __attribute__((always_inline))
 float absf(float n) {
     return n < 0 ? -n : n;
@@ -45,37 +43,6 @@ void r_draw_column_textured_alpha(int column, float offset, float distance, FL_T
     }
 }
 
-void draw_column_textured(int column, float offset, float distance, float wall_height, float wall_z, FL_Texture *texture) {
-    uint32_t *p = FL_GetFrameBuffer();
-
-    const float player_z = PROJECTION_HEIGHT >> 1;
-    const float z = player_z - wall_z;
-
-    const float height = (float)wall_height / distance;
-
-    int draw_end = (PROJECTION_HEIGHT >> 1) + z / distance;
-    int draw_start = draw_end - height;
-
-    if(draw_start < 0) draw_start = 0;
-    if(draw_end >= PROJECTION_HEIGHT) draw_end = PROJECTION_HEIGHT - 1;
-    if(draw_end >= test) draw_end = test;
-
-    const int tex_x = (int)floorf(offset * texture->width) & (texture->width - 1);
-    const float tex_step = (float)texture->height / height;
-    float tex_pos = draw_start > 0 ? 0 : ((height - PROJECTION_HEIGHT) / 2) * tex_step;
-
-    for(int i = draw_start; i < draw_end; ++i) {
-        int tex_y = (int)tex_pos & (texture->height - 1);
-        
-        uint32_t color = texture->data[tex_y * texture->width + tex_x];
-        tex_pos += tex_step;
-
-        *(p + column + i * PROJECTION_WIDTH) = color;
-    }
-
-    test = draw_start;
-}
-
 void r_draw_column_textured(int column, float offset, float distance, FL_Texture *texture) {
     uint32_t *p = FL_GetFrameBuffer();
 
@@ -109,8 +76,12 @@ void r_draw_column_textured(int column, float offset, float distance, FL_Texture
 }
 
 void r_draw_walls(const map_t *map, const player_t *p) {
+    uint32_t *fb = FL_GetFrameBuffer();
+
     for(int i = 0; i < PROJECTION_WIDTH; ++i) {
-        test = PROJECTION_HEIGHT;
+        float last_wall_height = 0;
+        int last_v_scanline = 1e8;
+
         int mx = floorf(p->x), my = floorf(p->y); // map coordinates of the player
         
         float cam_x = (float)i * 2 / PROJECTION_WIDTH - 1;
@@ -154,11 +125,54 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                 side = 0;
             }
 
-            if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) continue;
-            if(map->data[my * map->width + mx] != 0) {
-                hit = map->data[my * map->width + mx];
+            if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) break;
 
+            hit = map->data[my * map->width + mx];
+
+            float wall_height = 0;
+            if(hit == 1) wall_height = PROJECTION_HEIGHT;
+            else if(hit == 2) wall_height = PROJECTION_HEIGHT >> 2;
+
+            if(wall_height != last_wall_height) {
                 float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
+
+                int last_wall_top = last_v_scanline;
+                int wall_bottom = (PROJECTION_HEIGHT >> 1) + (p->z - last_wall_height) / distance;
+                int wall_top = wall_bottom;
+
+                // draw wall if it is a wall
+                if(wall_height != 0) {
+                    const float height = (float)(wall_height - last_wall_height) / distance;
+                    wall_top = wall_bottom - height;
+
+                    if(wall_top > last_wall_top) continue;
+
+                    if(wall_bottom >= last_wall_top) wall_bottom = last_wall_top;
+                    if(wall_bottom >= PROJECTION_HEIGHT) wall_bottom = PROJECTION_HEIGHT - 1;
+
+                    if(wall_top < 0) wall_top = 0;
+
+                    for(int y = wall_top; y < wall_bottom; ++y) {
+                        uint32_t color = side == 0 ? 0xffff00 : 0xaaaa00;
+                        *(fb + i + y * PROJECTION_WIDTH) = color;
+                    }
+                }
+
+                if(wall_bottom < last_v_scanline) {
+                    if(wall_bottom < 0) wall_bottom = 0;
+                    if(last_wall_top >= PROJECTION_HEIGHT) last_wall_top = PROJECTION_HEIGHT - 1;
+                    for(int y = wall_bottom; y < last_wall_top; ++y) {
+                        uint32_t color = last_wall_height == 0 ? 0xff0000 : 0x0000ff;
+                        *(fb + i + y * PROJECTION_WIDTH) = color;
+                    }
+                }
+
+                last_v_scanline = wall_top;
+            }
+
+            last_wall_height = wall_height;
+
+            /*
                 float offset;
                 if(side == 0) {
                     offset = p->x + distance * ray_dx;
@@ -167,14 +181,7 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                     offset = p->y + distance * ray_dy;
                     offset -= floorf(offset);
                 }
-
-                float height = 0;
-                if(hit == 1) height = PROJECTION_HEIGHT;
-                else height = 150;
-
-                draw_column_textured(i, offset, distance, height, 0, wall0);
-                z_buffer[i] = distance;
-            }
+            }*/
         }        
     }
 }
@@ -189,9 +196,7 @@ void r_draw_floor(const map_t *map, const player_t *p) {
     for(int i = PROJECTION_HEIGHT >> 1; i < PROJECTION_HEIGHT; ++i) {
         int d = (PROJECTION_HEIGHT >> 1) - i;
 
-        const float player_z = PROJECTION_HEIGHT >> 1;
-
-        float r = -player_z / d;
+        float r = -p->z / d;
 
         float floorStepX = r * (ray_dir1_x - ray_dir0_x) / PROJECTION_WIDTH;
         float floorStepY = r * (ray_dir1_y - ray_dir0_y) / PROJECTION_WIDTH;
@@ -212,6 +217,8 @@ void r_draw_floor(const map_t *map, const player_t *p) {
             floorX += floorStepX;
             floorY += floorStepY;
 
+            if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
+            uint8_t *tile = map->data + my * map->width + mx;
 
             uint32_t color = *(t + ty * floor0->width + tx);
             *(fbc + PROJECTION_WIDTH - 1 - x) = color;

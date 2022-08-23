@@ -2,7 +2,7 @@
 #define __PLAYER__
 
 typedef struct {
-    float x, y;
+    float x, y, z;
     float dx, dy;
     float px, py;
 

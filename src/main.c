@@ -57,6 +57,7 @@ int main() {
     player_t player = { 
         .x = 9, 
         .y = 6,
+        .z = PROJECTION_HEIGHT >> 1,
         .dx = 1,
         .dy = 0,
         .px = 0,
@@ -135,8 +136,9 @@ int main() {
         player.py = player.py * cos(player.turn) + oldPlaneX * sin(player.turn);
 
         if(player.strafe) {
-            player.x += player.move * -player.dy * dt;
-            player.y += player.move * player.dx * dt;
+            player.z += player.move * dt * 100;
+            //player.x += player.move * -player.dy * dt;
+            //player.y += player.move * player.dx * dt;
         } else {
             player.x += player.move * player.dx * dt;
             player.y += player.move * player.dy * dt;
@@ -157,7 +159,7 @@ int main() {
         FL_Timer floor_timer, walls_timer, entity_timer;
 
         FL_StartTimer(&floor_timer);
-        r_draw_floor(map, &player);
+        //r_draw_floor(map, &player);
         FL_StopTimer(&floor_timer);
 
         FL_StartTimer(&walls_timer);
