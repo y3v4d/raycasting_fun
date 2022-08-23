@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <string.h>
+
+#include <curl/curl.h>
 
 #include "map.h"
 #include "debug.h"
@@ -14,6 +17,28 @@
 #include "vector.h"
 
 FL_Texture *wall0, *floor0;
+
+typedef struct {
+    char *data;
+    size_t size;
+} chunk_t;
+
+static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    chunk_t *chunk = (chunk_t*)userp;
+
+    chunk->data = realloc(chunk->data, chunk->size + realsize + 1);
+    if(!chunk->data) {
+        fprintf(stderr, "Memory error in write_callback.\n");
+        return 0;
+    }
+
+    memcpy(&(chunk->data[chunk->size]), contents, realsize);
+    chunk->size += realsize;
+    chunk->data[chunk->size] = 0;
+
+    return realsize;
+}
 
 int main() {
     if(!FL_Initialize(PROJECTION_WIDTH, PROJECTION_HEIGHT + 50))
@@ -97,6 +122,49 @@ int main() {
 
     vec2f_t mouse = { 0 };
     FL_Timer texts_timer = { 0 };
+
+    chunk_t chunk = {
+        .data = malloc(1),
+        .size = 0
+    };
+    chunk.data[0] = 0;
+
+    CURL *curl;
+    CURLcode res;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8081/test");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&chunk);
+        res = curl_easy_perform(curl);
+        if(res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        } else {
+            printf("Data:\n%s\n", chunk.data);
+            printf("Successfull GET");
+        }
+        /*curl_easy_setopt(curl, CURLOPT_URL, "http://ClickerHeroes-SavedGames3-747864888.us-east-1.elb.amazonaws.com/clans/getGuildInfo.php");
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "uid=156502795987102193248262628913&passwordHash=aaSCnqHKBNPZrAkI");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&chunk);
+
+        res = curl_easy_perform(curl);
+        if(res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        } else {
+            printf("Data:\n%s\n", chunk.data);
+            //printf("string length: %lu data size: %lu\n", strlen(chunk.data), chunk.size);
+            printf("Successfull POST\n");
+        }
+
+        curl_easy_cleanup(curl);*/
+    } else {
+        fprintf(stderr, "Couldn't initialize curl.\n");
+    }
+
+    curl_global_cleanup();
 
     FL_Event event;
     while(!FL_WindowShouldClose()) {
@@ -218,6 +286,8 @@ int main() {
 
         FL_Render();
     }
+
+    free(chunk.data);
 
     map_close(map);
     FL_FreeTexture(entity0);
