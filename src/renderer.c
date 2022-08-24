@@ -161,14 +161,34 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                 float wall_bottom = (PROJECTION_HEIGHT >> 1) + p->z / distance;
                 float wall_top = wall_bottom - height;
 
-                if(wall_top < 0) wall_top = 0;
-                if(wall_top >= highest_top) continue;
-                if(wall_bottom >= PROJECTION_HEIGHT) wall_bottom = PROJECTION_HEIGHT - 1;
-                if(wall_bottom > highest_top) wall_bottom = highest_top;
+                int draw_start = wall_top <= 0 ? 0 : wall_top;
+                int draw_end = wall_bottom >= PROJECTION_HEIGHT ? PROJECTION_HEIGHT - 1 : wall_bottom;
 
-                for(int y = wall_top; y < wall_bottom; ++y) {
-                    uint32_t color = side == 0 ? 0xffff00 : 0xaaaa00;
+                if(draw_start >= highest_top) continue;
+                if(draw_end > highest_top) draw_end = highest_top;
+
+                float offset;
+                if(side == 0) {
+                    offset = p->x + distance * ray_dx;
+                    offset -= floorf(offset);
+                } else {
+                    offset = p->y + distance * ray_dy;
+                    offset -= floorf(offset);
+                }
+
+                const int tex_x = (int)(offset * wall0->width) & (wall0->width - 1);
+                const float tex_step = (float)wall0->height / (PROJECTION_HEIGHT / distance);
+                float tex_pos = wall0->height - wall_height / PROJECTION_HEIGHT * wall0->height;
+                if(wall_top < 0) tex_pos += -wall_top * tex_step;
+
+                for(int y = draw_start; y < draw_end; ++y) {
+                    int tex_y = (int)tex_pos & (wall0->height - 1);
+                    
+                    uint32_t color = wall0->data[tex_y * wall0->width + tex_x];
+                    tex_pos += tex_step;
+
                     *(fb + i + y * PROJECTION_WIDTH) = color;
+                    //FL_DrawPoint(column, i, color);
                 }
 
                 if(wall_top < highest_top) highest_top = wall_top;
