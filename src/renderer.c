@@ -109,16 +109,14 @@ void r_draw_walls(const map_t *map, const player_t *p) {
             map_step_y = -1;
             curr_dy = (p->y - my) * delta_y;
         }
-
-        float highest_top = PROJECTION_HEIGHT - 1;
-        float last_wall_height = 0;
-
+        
         int side = 0; // 0 - horizontal 1 - vertical
         int hit = map->data[my * map->width + mx];
 
-        float wall_height = 0;
-        if(hit == 1) wall_height = PROJECTION_HEIGHT;
-        else if(hit == 2) wall_height = PROJECTION_HEIGHT >> 2;
+        float highest_top = PROJECTION_HEIGHT - 1;
+        float last_wall_height = 0;
+        if(hit == 1) last_wall_height = PROJECTION_HEIGHT;
+        else if(hit == 2) last_wall_height = PROJECTION_HEIGHT >> 2;
 
         for(int j = 0; j < 50; ++j) {
             if(curr_dx < curr_dy) {
@@ -131,25 +129,40 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                 side = 0;
             }
 
+            const float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
+
+            // first try to draw the topside of the wall
+            float x = (PROJECTION_HEIGHT >> 1) + (p->z - last_wall_height) / distance;
+            if(x < highest_top) {
+                if(x < 0) x = 0;
+                for(int y = x; y < highest_top; ++y) {
+                    //if(last_wall_height == 0) break;
+                    uint32_t color = last_wall_height == 0 ? 0xff0000 : 0x0000ff;
+                    *(fb + i + y * PROJECTION_WIDTH) = color;
+                }
+
+                highest_top = x;
+            }
+
+            // return if out of bounds
             if(my < 0 || my >= map->height || mx < 0 || mx >= map->width) break;
 
-            hit = map->data[my * map->width + mx];
+            hit = map->data[my * map->width + mx]; // what cell was hit
 
-            last_wall_height = wall_height;
+            float wall_height = 0;
             if(hit == 1) wall_height = PROJECTION_HEIGHT;
             else if(hit == 2) wall_height = PROJECTION_HEIGHT >> 2;
-            else wall_height = 0;
+            last_wall_height = wall_height;
 
-            int new_top = highest_top;
-            const float distance = (side == 0 ? curr_dy - delta_y : curr_dx - delta_x);
-            int wall_bottom = (PROJECTION_HEIGHT >> 1) + p->z / distance;
-
-            // draw wall if it is a wall
+            // draw wall if there is one
             if(wall_height != 0) {
                 const float height = (float)wall_height / distance;
-                int wall_top = wall_bottom - height;
+
+                float wall_bottom = (PROJECTION_HEIGHT >> 1) + p->z / distance;
+                float wall_top = wall_bottom - height;
 
                 if(wall_top < 0) wall_top = 0;
+                if(wall_top >= highest_top) continue;
                 if(wall_bottom >= PROJECTION_HEIGHT) wall_bottom = PROJECTION_HEIGHT - 1;
                 if(wall_bottom > highest_top) wall_bottom = highest_top;
 
@@ -158,23 +171,8 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                     *(fb + i + y * PROJECTION_WIDTH) = color;
                 }
 
-                if(wall_top < highest_top) new_top = wall_top;
+                if(wall_top < highest_top) highest_top = wall_top;
             }
-
-            int floor_end = (PROJECTION_HEIGHT >> 1) + (p->z - last_wall_height) / distance;
-            if(floor_end <= highest_top) {
-                if(floor_end < 0) floor_end = 0;
-                for(int y = floor_end; y < highest_top; ++y) {
-                    if(last_wall_height == 0) break;
-                    uint32_t color = last_wall_height == 0 ? 0xff0000 : 0x0000ff;
-                    *(fb + i + y * PROJECTION_WIDTH) = color;
-                }
-
-                if(floor_end < new_top) new_top = floor_end;
-            }
-
-            
-            highest_top = new_top;
 
             /*
                 float offset;
