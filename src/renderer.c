@@ -7,11 +7,6 @@
 
 float z_buffer[PROJECTION_WIDTH] = { 0 };
 
-inline __attribute__((always_inline))
-float absf(float n) {
-    return n < 0 ? -n : n;
-}
-
 void r_draw_column(int column, float distance, uint32_t color) {
     const float half_height = (float)PROJECTION_HEIGHT / distance / 2;
 
@@ -41,6 +36,11 @@ void r_draw_column_textured_alpha(int column, float offset, float distance, FL_T
 
         *(p + column + i * PROJECTION_WIDTH) = color;
     }
+}
+
+int get_wall_height(uint8_t type) {
+    if(type == 0) return 0;
+    else return PROJECTION_HEIGHT >> (type - 1);
 }
 
 void r_draw_column_textured(int column, float offset, float distance, FL_Texture *texture) {
@@ -114,9 +114,7 @@ void r_draw_walls(const map_t *map, const player_t *p) {
         int hit = map->data[my * map->width + mx];
 
         float highest_top = PROJECTION_HEIGHT - 1;
-        float last_wall_height = 0;
-        if(hit == 1) last_wall_height = PROJECTION_HEIGHT;
-        else if(hit == 2) last_wall_height = PROJECTION_HEIGHT >> 2;
+        float last_wall_height = get_wall_height(hit);
 
         for(int j = 0; j < 50; ++j) {
             if(curr_dx < curr_dy) {
@@ -136,8 +134,19 @@ void r_draw_walls(const map_t *map, const player_t *p) {
             if(x < highest_top) {
                 if(x < 0) x = 0;
                 for(int y = x; y < highest_top; ++y) {
-                    //if(last_wall_height == 0) break;
-                    uint32_t color = last_wall_height == 0 ? 0xff0000 : 0x0000ff;
+                    float r = -(p->z - last_wall_height) / ((PROJECTION_HEIGHT >> 1) - y);
+                    float floor_x = p->x + ray_dx * r;
+                    float floor_y = p->y + ray_dy * r;
+
+                    float tex_x = floor_x - (int)floor_x;
+                    float tex_y = floor_y - (int)floor_y;
+
+                    int tx = (int)(floor0->width * tex_x) & (floor0->width - 1);
+                    int ty = (int)(floor0->height * tex_y) & (floor0->height - 1);
+
+                    FL_Texture *tex = (last_wall_height == 0 ? floor0 : wall0);
+
+                    uint32_t color = tex->data[ty * tex->width + tx];
                     *(fb + i + y * PROJECTION_WIDTH) = color;
                 }
 
@@ -149,9 +158,7 @@ void r_draw_walls(const map_t *map, const player_t *p) {
 
             hit = map->data[my * map->width + mx]; // what cell was hit
 
-            float wall_height = 0;
-            if(hit == 1) wall_height = PROJECTION_HEIGHT;
-            else if(hit == 2) wall_height = PROJECTION_HEIGHT >> 2;
+            float wall_height = get_wall_height(hit);
             last_wall_height = wall_height;
 
             // draw wall if there is one
@@ -167,6 +174,7 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                 if(draw_start >= highest_top) continue;
                 if(draw_end > highest_top) draw_end = highest_top;
 
+                // actually draw the wall
                 float offset;
                 if(side == 0) {
                     offset = p->x + distance * ray_dx;
@@ -176,6 +184,7 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                     offset -= floorf(offset);
                 }
 
+                // calculate texture values
                 const int tex_x = (int)(offset * wall0->width) & (wall0->width - 1);
                 const float tex_step = (float)wall0->height / (PROJECTION_HEIGHT / distance);
                 float tex_pos = wall0->height - wall_height / PROJECTION_HEIGHT * wall0->height;
@@ -188,7 +197,6 @@ void r_draw_walls(const map_t *map, const player_t *p) {
                     tex_pos += tex_step;
 
                     *(fb + i + y * PROJECTION_WIDTH) = color;
-                    //FL_DrawPoint(column, i, color);
                 }
 
                 if(wall_top < highest_top) highest_top = wall_top;

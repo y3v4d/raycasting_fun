@@ -14,6 +14,7 @@
 #include "vector.h"
 
 FL_Texture *wall0, *floor0;
+vec2f_t mouse = { 0 };
 
 int main() {
     if(!FL_Initialize(PROJECTION_WIDTH, PROJECTION_HEIGHT + 50))
@@ -96,7 +97,6 @@ int main() {
     char stats_text[512];
     char txt_more_timers[512];
 
-    vec2f_t mouse = { 0 };
     FL_Timer texts_timer = { 0 };
 
     FL_Event event;

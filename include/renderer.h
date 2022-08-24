@@ -6,9 +6,12 @@
 
 #include "map.h"
 #include "player.h"
+#include "vector.h"
 
 #define PROJECTION_WIDTH 640
 #define PROJECTION_HEIGHT 430
+
+extern vec2f_t mouse;
 
 extern FL_Texture *wall0, *floor0;
 extern float z_buffer[PROJECTION_WIDTH];

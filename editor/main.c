@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
                     if(mx < 0 || mx >= map->width || my < 0 || my >= map->height) continue;
                     uint8_t *tile = map->data + my * map->width + mx;
                     *tile += 1;
-                    if(*tile >= 3) {
+                    if(*tile >= 6) {
                         *tile = 0;
                     }
                 } else if(event.mouse.button == 3) {
@@ -119,9 +119,12 @@ int main(int argc, char **argv) {
                 uint8_t *tile = map->data + y * map->width + x;
                 uint32_t color;
 
-                if(*tile == 0) color = 0x6666aa;
-                else if(*tile == 1) color = 0xaaaa66;
-                else if(*tile == 2) color = 0xaa66aa;
+                if(*tile == 0) color = 0x222222;
+                else if(*tile == 1) color = 0xffff00;
+                else if(*tile == 2) color = 0xdddd00;
+                else if(*tile == 3) color = 0xbbbb00;
+                else if(*tile == 4) color = 0x999900;
+                else if(*tile == 5) color = 0x777700;
 
                 FL_DrawRect(rx, ry, grid_size, grid_size, color, true);
                 FL_DrawRect(rx, ry, grid_size, grid_size, 0, false);
